@@ -6,26 +6,26 @@
   <!-- 포인트 클라우드 처리 파이프라인 -->
   <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="screen" />
   
-<!-- 벨로다인 데이터 다운샘플링을 위한 VoxelGrid 필터 -->
+  <!-- 벨로다인 데이터 다운샘플링을 위한 VoxelGrid 필터 -->
   <node pkg="nodelet" type="nodelet" name="voxel_grid" args="load pcl/VoxelGrid pcl_manager" output="screen">
     <remap from="~input" to="/velodyne_points" />
     <remap from="~output" to="/velodyne_points_filtered" />
-    <param name="leaf_size" value="0.05" /> <!-- 더 세밀한 해상도로 수정 -->
+    <param name="leaf_size" value="0.05" />
     <param name="filter_field_name" value="z" />
-    <param name="filter_limit_min" value="-1.2" /> <!-- 지면 아래 데이터도 포함 -->
+    <param name="filter_limit_min" value="-0.7" />
     <param name="filter_limit_max" value="2.0" />
   </node>
 
-  <!-- 음수 높이 필터 (너무 낮은 영역은 제외) -->
+  <!-- 음수 높이 필터 -->
   <node pkg="nodelet" type="nodelet" name="negative_height_filter" args="load pcl/PassThrough pcl_manager" output="screen">
     <remap from="~input" to="/velodyne_points_filtered" />
     <remap from="~output" to="/velodyne_points_height_filtered" />
     <param name="filter_field_name" value="z" />
-    <param name="filter_limit_min" value="-1.0" /> <!-- 낮은 지면 및 경사로 포함 -->
+    <param name="filter_limit_min" value="-1.0" />
     <param name="filter_limit_max" value="2.5" />
   </node>
   
-  <!-- 원거리 제한 필터 (계산 효율성을 위해) -->
+  <!-- 원거리 제한 필터 -->
   <node pkg="nodelet" type="nodelet" name="range_filter" args="load pcl/PassThrough pcl_manager" output="screen">
     <remap from="~input" to="/velodyne_points_height_filtered" />
     <remap from="~output" to="/velodyne_points_range_limited" />
@@ -33,13 +33,14 @@
     <param name="filter_limit_min" value="-8.0" />
     <param name="filter_limit_max" value="8.0" />
   </node>
-  
-  <!-- 추가적인 거리 제한 필터 (반경 기준) -->
-  <node pkg="nodelet" type="nodelet" name="radial_filter" args="load pcl/RadiusOutlierRemoval pcl_manager" output="screen">
+
+  <!-- Y축 범위 제한 필터 -->
+  <node pkg="nodelet" type="nodelet" name="y_range_filter" args="load pcl/PassThrough pcl_manager" output="screen">
     <remap from="~input" to="/velodyne_points_range_limited" />
-    <remap from="~output" to="/velodyne_points_radial_filtered" />
-    <param name="radius_search" value="40.0" />   <!-- 5미터 반경 내의 점들만 유지 -->
-    <param name="min_neighbors" value="1" />     <!-- 최소 이웃 점 개수 -->
+    <remap from="~output" to="/velodyne_points_final" />
+    <param name="filter_field_name" value="y" />
+    <param name="filter_limit_min" value="-8.0" />
+    <param name="filter_limit_max" value="8.0" />
   </node>
 
   <!-- Move Base 네비게이션 스택 사용 -->
@@ -51,21 +52,26 @@
     <rosparam file="$(find husky_dwa_navigation)/config/move_base_params.yaml" command="load" />
     <rosparam file="$(find husky_dwa_navigation)/config/dwa_local_planner_params.yaml" command="load" />
     
+    <!-- 로컬 플래너 설정 -->
     <param name="base_local_planner" value="dwa_local_planner/DWAPlannerROS" />
+    
+    <!-- 글로벌 플래너 설정 (맵 없이도 작동하는 global_planner 사용) -->
+    <param name="base_global_planner" value="global_planner/GlobalPlanner" />
+    
+    <!-- 플래너 빈도 설정 -->
     <param name="controller_frequency" value="10.0" />
+    <param name="planner_frequency" value="5.0" />
+    
+    <!-- GlobalPlanner 파라미터 -->
+    <param name="GlobalPlanner/allow_unknown" value="true" />
+    <param name="GlobalPlanner/use_dijkstra" value="true" />
+    <param name="GlobalPlanner/use_quadratic" value="true" />
+    <param name="GlobalPlanner/use_grid_path" value="false" />
+    <param name="GlobalPlanner/old_navfn_behavior" value="false" />
   </node>
-
-  <!-- 직접 구현한 DWA 플래너 사용 (move_base 대신 단독으로 사용할 경우) -->
-  <!-- 
-  <include file="$(find dwa_planner)/launch/local_planner.launch">
-    <arg name="use_scan_as_input" value="false"/> 
-    <arg name="v_path_width" value="0.05"/>
-  </include>
-  -->
 
   <!-- StaticTransformPublisher: Velodyne 장치의 정확한 위치 게시 -->
   <node pkg="tf" type="static_transform_publisher" name="velodyne_tf_publisher" 
         args="0.2 0 0.4 0 0 0 top_plate_link velodyne 100" />
-
 
 </launch>
