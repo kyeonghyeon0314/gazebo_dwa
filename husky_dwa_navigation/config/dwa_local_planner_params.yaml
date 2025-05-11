@@ -14,8 +14,8 @@ DWAPlannerROS:
   
   # 목표 도달 허용치
   xy_goal_tolerance: 0.2    # 위치 허용 오차 (m)
-  yaw_goal_tolerance: 0.2   # 방향 허용 오차 (rad)
-  latch_xy_goal_tolerance: false  # 위치 도달 후 회전만 허용
+  yaw_goal_tolerance: 45   # 방향 허용 오차 (rad)
+  latch_xy_goal_tolerance: True  # 위치 도달 후 회전만 허용
   
   # 경로 평가 매개변수
   path_distance_bias: 32.0      # 글로벌 경로 따르기 가중치
@@ -27,7 +27,7 @@ DWAPlannerROS:
   max_scaling_factor: 0.2       # 최대 스케일링 팩터
   
   # 시뮬레이션 매개변수
-  sim_time: 2.0           # 경로 시뮬레이션 시간 (s)
+  sim_time: 5.0           # 경로 시뮬레이션 시간 (s)
   sim_granularity: 0.025  # 시뮬레이션 단계 크기 (m)
   vx_samples: 10          # x 속도 샘플 수
   vy_samples: 0           # y 속도 샘플 수 (비홀로노믹)
@@ -35,7 +35,7 @@ DWAPlannerROS:
   controller_frequency: 10.0  # 컨트롤러 주기 (Hz)
   
   # 진동 방지
-  oscillation_reset_dist: 0.05  # 진동 감지 거리 (m)
+  oscillation_reset_dist: 0.1  # 진동 감지 거리 (m)
   
   # 시각화 설정
   publish_traj_pc: true        # 궤적 포인트 클라우드 발행

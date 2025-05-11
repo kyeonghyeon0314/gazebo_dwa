@@ -5,9 +5,10 @@ controller_patience: 15.0
 conservative_reset_dist: 3.0
 planner_frequency: 5.0
 oscillation_timeout: 10.0
-oscillation_distance: 0.2
+oscillation_distance: 0.5
 recovery_behavior_enabled: true
 clearing_rotation_allowed: true
+force_clearing_rotation_on_recovery: true  # 복구 시 항상 회전
 
 # 복구 동작 설정
 recovery_behaviors:

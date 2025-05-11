@@ -26,7 +26,7 @@ voxel_layer:
     sensor_frame: velodyne
     marking: true
     clearing: true
-    min_obstacle_height: -0.5     # 지면 약간 아래까지 장애물 감지
+    min_obstacle_height: 0.15     
     max_obstacle_height: 1.8      # 로봇 위의 장애물 감지
     observation_persistence: 0.0  # 관측이 지속되는 시간 (0: 즉시 업데이트)
     expected_update_rate: 10.0    # 예상 업데이트 빈도
@@ -35,4 +35,4 @@ voxel_layer:
 inflation_layer:
   enabled: true
   cost_scaling_factor: 5.0   # 비용 감소 비율
-  inflation_radius: 0.7      # 장애물 주변 인플레이션 반경 (m)
+  inflation_radius: 2.0      # 장애물 주변 인플레이션 반경 (m)
