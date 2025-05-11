@@ -1,13 +1,14 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>husky_velodyne_dwa_nav</name>
-  <version>0.0.1</version>
+  <name>husky_dwa_navigation</name>
+  <version>0.1.0</version>
   <description>Navigation package for Husky with Velodyne LiDAR using DWA planner</description>
-  
-  <maintainer email="your_email@example.com">Your Name</maintainer>
+
+  <maintainer email="user@example.com">User</maintainer>
   <license>BSD</license>
-  
+
   <buildtool_depend>catkin</buildtool_depend>
+  
   <depend>roscpp</depend>
   <depend>rospy</depend>
   <depend>tf</depend>
@@ -16,12 +17,15 @@
   <depend>sensor_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>move_base</depend>
-  <depend>costmap_2d</depend>
   <depend>dwa_local_planner</depend>
   <depend>husky_control</depend>
-  <depend>velodyne_pointcloud</depend>
+  <depend>husky_custom_gazebo</depend>
+  <depend>husky_custom_description</depend>
+  <depend>pointcloud_to_laserscan</depend>
   <depend>pcl_ros</depend>
-  
+  <depend>nodelet</depend>
+  <depend>costmap_2d</depend>
+
   <export>
   </export>
 </package>

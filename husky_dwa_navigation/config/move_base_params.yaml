@@ -6,3 +6,14 @@ conservative_reset_dist: 3.0
 planner_frequency: 5.0
 oscillation_timeout: 10.0
 oscillation_distance: 0.2
+recovery_behavior_enabled: true
+clearing_rotation_allowed: true
+
+# 복구 동작 설정
+recovery_behaviors:
+  - name: conservative_reset
+    type: clear_costmap_recovery/ClearCostmapRecovery
+  - name: rotate_recovery
+    type: rotate_recovery/RotateRecovery
+  - name: aggressive_reset
+    type: clear_costmap_recovery/ClearCostmapRecovery

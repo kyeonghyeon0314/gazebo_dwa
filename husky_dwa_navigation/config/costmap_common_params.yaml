@@ -2,57 +2,39 @@
 footprint: [[-0.495, -0.335], [-0.495, 0.335], [0.495, 0.335], [0.495, -0.335]]
 footprint_padding: 0.01
 
-# 장애물 레이어 설정
-obstacle_layer:
-  enabled: true
-  max_obstacle_height: 2.0
-  min_obstacle_height: 0.08
-  obstacle_range: 4.5
-  raytrace_range: 5.0
-  inflation_radius: 0.55
-  track_unknown_space: true
-  combination_method: 1
-  observation_sources: velodyne_cloud
-
-  # 벨로다인 라이다 설정
-  velodyne_cloud:
-    data_type: PointCloud2
-    topic: /velodyne_points_filtered
-    sensor_frame: velodyne
-    marking: true
-    clearing: true
-    expected_update_rate: 10.0
-    min_obstacle_height: 0.15
-    max_obstacle_height: 2.0
-    obstacle_range: 4.5
-    raytrace_range: 5.0
-
-# 3D 복셀 레이어 설정
+# 복셀 그리드 레이어 설정 (3D 장애물 감지용)
 voxel_layer:
   enabled: true
   publish_voxel_map: true
-  origin_z: 0.0
-  z_resolution: 0.1
-  z_voxels: 16
+  origin_z: -1.0
+  z_resolution: 0.05
+  z_voxels: 20
   max_obstacle_height: 2.0
-  unknown_threshold: 9
-  mark_threshold: 0
+  mark_threshold: 1
+  unknown_threshold: 15
   combination_method: 1
-  obstacle_range: 4.5
-  raytrace_range: 5.0
-  observation_sources: velodyne_cloud
-  
-  velodyne_cloud:
+  obstacle_range: 5.0
+  raytrace_range: 6.0
+  track_unknown_space: true
+  footprint_clearing_enabled: true
+  observation_sources: point_cloud_sensor
+
+  # 벨로다인 포인트 클라우드 설정
+  point_cloud_sensor:
     data_type: PointCloud2
-    topic: /velodyne_points_filtered
+    topic: /velodyne_points_range_limited
     sensor_frame: velodyne
     marking: true
     clearing: true
-    max_obstacle_height: 2.0
-    min_obstacle_height: 0.15
+    min_obstacle_height: -0.25
+    max_obstacle_height: 1.8
+    obstacle_range: 5.0
+    raytrace_range: 6.0
+    expected_update_rate: 10.0
+    observation_persistence: 0.0
 
 # 인플레이션 레이어 설정
 inflation_layer:
   enabled: true
-  cost_scaling_factor: 10.0
-  inflation_radius: 0.6
+  cost_scaling_factor: 5.0   # 더 넓은 범위에서 장애물 비용을 유지
+  inflation_radius: 0.7      # 장애물 주변 인플레이션 반경 (m)
