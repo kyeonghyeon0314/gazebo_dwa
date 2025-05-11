@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- 가제보 환경과 휴스키 로봇 실행 -->
+  <include file="$(find husky_custom_gazebo)/launch/husky_velodyne.launch">
+    <arg name="gui" value="true"/>
+  </include>
+
+  <!-- 포인트 클라우드 처리 파이프라인 -->
+  <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="screen" />
+  
+  <!-- 벨로다인 데이터 다운샘플링을 위한 VoxelGrid 필터 -->
+  <node pkg="nodelet" type="nodelet" name="voxel_grid" args="load pcl/VoxelGrid pcl_manager" output="screen">
+    <remap from="~input" to="/velodyne_points" />
+    <remap from="~output" to="/velodyne_points_filtered" />
+    <param name="leaf_size" value="0.1" />
+    <param name="filter_field_name" value="z" />
+    <param name="filter_limit_min" value="0.05" />
+    <param name="filter_limit_max" value="2.0" />
+  </node>
+
+  <!-- 지면 제거 필터 -->
+  <node pkg="nodelet" type="nodelet" name="ground_plane_removal" args="load pcl/PassThrough pcl_manager" output="screen">
+    <remap from="~input" to="/velodyne_points_filtered" />
+    <remap from="~output" to="/velodyne_points_no_ground" />
+    <param name="filter_field_name" value="z" />
+    <param name="filter_limit_min" value="0.15" />
+    <param name="filter_limit_max" value="2.0" />
+  </node>
+
+  <!-- Move Base 네비게이션 스택 -->
+  <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+    <rosparam file="$(find husky_velodyne_dwa_nav)/config/costmap_common_params.yaml" command="load" ns="global_costmap" />
+    <rosparam file="$(find husky_velodyne_dwa_nav)/config/costmap_common_params.yaml" command="load" ns="local_costmap" />
+    <rosparam file="$(find husky_velodyne_dwa_nav)/config/local_costmap_params.yaml" command="load" />
+    <rosparam file="$(find husky_velodyne_dwa_nav)/config/global_costmap_params.yaml" command="load" />
+    <rosparam file="$(find husky_velodyne_dwa_nav)/config/move_base_params.yaml" command="load" />
+    <rosparam file="$(find husky_velodyne_dwa_nav)/config/dwa_local_planner_params.yaml" command="load" />
+    
+    <param name="base_local_planner" value="dwa_local_planner/DWAPlannerROS" />
+    <param name="controller_frequency" value="10.0" />
+    
+    <!-- 기존 시스템과의 통합을 위한 토픽 리매핑 -->
+    <remap from="/cmd_vel" to="/move_base/cmd_vel" />
+  </node>
+  
+  <!-- 기존 시스템의 twist_mux에 DWA 플래너 명령 추가 -->
+  <node pkg="topic_tools" type="mux" name="nav_vel_mux" 
+        args="/cmd_vel /joy_teleop/cmd_vel /kb_teleop/cmd_vel /move_base/cmd_vel /twist_marker_server/cmd_vel" >
+    <remap from="mux" to="cmd_vel_mux" />
+  </node>
+
+</launch>
