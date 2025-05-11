@@ -10,10 +10,11 @@
   <node pkg="nodelet" type="nodelet" name="voxel_grid" args="load pcl/VoxelGrid pcl_manager" output="screen">
     <remap from="~input" to="/velodyne_points" />
     <remap from="~output" to="/velodyne_points_filtered" />
-    <param name="leaf_size" value="0.05" />
+    <param name="leaf_size" value="0.10" />
     <param name="filter_field_name" value="z" />
     <param name="filter_limit_min" value="-0.7" />
     <param name="filter_limit_max" value="2.0" />
+    <param name="use_gpu" value="true"/>  <!-- GPU 사용 활성화 -->
   </node>
 
   <!-- 음수 높이 필터 -->
@@ -21,8 +22,9 @@
     <remap from="~input" to="/velodyne_points_filtered" />
     <remap from="~output" to="/velodyne_points_height_filtered" />
     <param name="filter_field_name" value="z" />
-    <param name="filter_limit_min" value="-1.0" />
+    <param name="filter_limit_min" value="-0.7" />
     <param name="filter_limit_max" value="2.5" />
+    <param name="use_gpu" value="true"/>  <!-- GPU 사용 활성화 -->
   </node>
   
   <!-- 원거리 제한 필터 -->
@@ -32,6 +34,7 @@
     <param name="filter_field_name" value="x" />
     <param name="filter_limit_min" value="-8.0" />
     <param name="filter_limit_max" value="8.0" />
+    <param name="use_gpu" value="true"/>  <!-- GPU 사용 활성화 -->
   </node>
 
   <!-- Y축 범위 제한 필터 -->
@@ -41,6 +44,7 @@
     <param name="filter_field_name" value="y" />
     <param name="filter_limit_min" value="-8.0" />
     <param name="filter_limit_max" value="8.0" />
+    <param name="use_gpu" value="true"/>  <!-- GPU 사용 활성화 -->
   </node>
 
   <!-- Move Base 네비게이션 스택 사용 -->

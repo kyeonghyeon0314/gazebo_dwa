@@ -1,16 +1,16 @@
 DWAPlannerROS:
   # Husky A200 사양에 맞는 로봇 설정
-  max_vel_x: 0.9      # 최대 전진 속도 (m/s)
-  min_vel_x: 0.0      # 최소 전진 속도 (m/s)
+  max_vel_x: 1.0      # 최대 전진 속도 (m/s)
+  min_vel_x: -1.0      # 최소 전진 속도 (m/s)
   max_vel_y: 0.0
   min_vel_y: 0.0
-  max_vel_trans: 0.9  # 최대 이동 속도 (m/s)
+  max_vel_trans: 1.0  # 최대 이동 속도 (m/s)
   min_vel_trans: 0.1  # 최소 이동 속도 (m/s)
-  max_vel_theta: 1.0  # 최대 회전 속도 (rad/s)
+  max_vel_theta: 1.7  # 최대 회전 속도 (rad/s)
   min_vel_theta: 0.2  # 최소 회전 속도 (rad/s)
-  acc_lim_x: 1.0      # X축 가속도 제한 (m/s^2)
+  acc_lim_x: 3.0      # X축 가속도 제한 (m/s^2)
   acc_lim_y: 0.0      # Y축 가속도 제한 (m/s^2)
-  acc_lim_theta: 3.2  # 회전 가속도 제한 (rad/s^2)
+  acc_lim_theta: 6.0  # 회전 가속도 제한 (rad/s^2)
   
   # 목표 도달 허용치
   xy_goal_tolerance: 0.2    # 위치 허용 오차 (m)
