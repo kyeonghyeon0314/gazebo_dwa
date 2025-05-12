@@ -2,8 +2,10 @@
 gazebo환경에 husky와 velodyne 라이다 추가하고 dwa를 통한 장애물 회피 기동
 
 
+<p align='center'>
+    <img src="/gazebo_velodyne_dwa/docs/images/시연연상.gif" alt="drawing" width="800"/>
+</p>
 
-![Demo Video](docs/images/시연연상.gif)
 
 # TODO
 ```
