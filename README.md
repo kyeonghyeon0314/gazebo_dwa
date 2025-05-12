@@ -2,10 +2,19 @@
 gazebo환경에 husky와 velodyne 라이다 추가하고 dwa를 통한 장애물 회피 기동
 
 
-<p align='center'>
-    <img src="docs/images/demo.gif" alt="drawing" width="800"/>
-</p>
+<div align="center">
+  <div style="margin-bottom: 10px;">
+    <img src="docs/images/demo.gif" alt="drawing" width="80%"/>
+    <p style="text-align: center;">시연영상</p>
+  </div>
+</div>
 
+<div align="center">
+  <div style="margin-bottom: 10px;">
+    <img src="docs/images/dwa_rqt_graph.png" width="50%">
+    <p style="text-align: center;">rqt_graph</p>
+  </div>
+</div>
 
 # TODO
 ```
