@@ -25,15 +25,19 @@ catkin_make
 cd src
 git clone https://github.com/kyeonghyeon0314/gazebo_velodyne_dwa.git
 
-sudo apt-get install ros-<ros_distro>-gazebo-ros \
-                     ros-<ros_distro>-roscpp \
-                     ros-<ros_distro>-sensor-msgs \
-                     ros-<ros_distro>-tf \
-                     ros-<ros_distro>-velodyne-gazebo-plugins \
-                     ros-<ros_distro>-husky-description \
-                     ros-<ros_distro>-husky-gazebo \
-                     ros-<ros_distro>-dwa-local-planner \
-                     ros-<ros_distro>-move-base
+mv gazebo_velodyne_dwa/* .
+rm -rf gazebo_velodyne_dwa
+
+
+sudo apt-get install ros-noetic-gazebo-ros \
+                     ros-noetic-roscpp \
+                     ros-noetic-sensor-msgs \
+                     ros-noetic-tf \
+                     ros-noetic-velodyne-gazebo-plugins \
+                     ros-noetic-husky-description \
+                     ros-noetic-husky-gazebo \
+                     ros-noetic-dwa-local-planner \
+                     ros-noetic-move-base
 
 cd ..
 catkin_make
