@@ -3,7 +3,7 @@ gazebo환경에 husky와 velodyne 라이다 추가하고 dwa를 통한 장애물
 
 
 
-![Demo Video](docs/images/dwa_시연연상_3배속.mp4)
+![Demo Video](docs/images/시연연상.gif)
 
 # TODO
 ```
