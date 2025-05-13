@@ -10,7 +10,7 @@ DWAPlannerROS:
   min_vel_theta: 0.2  # 최소 회전 속도 (rad/s)
   acc_lim_x: 3.0      # X축 가속도 제한 (m/s^2)
   acc_lim_y: 0.0      # Y축 가속도 제한 (m/s^2)
-  acc_lim_theta: 6.0  # 회전 가속도 제한 (rad/s^2)
+  acc_lim_th: 6.0  # 회전 가속도 제한 (rad/s^2)
   
   # 목표 도달 허용치
   xy_goal_tolerance: 1   # 위치 허용 오차 (m)
@@ -27,7 +27,7 @@ DWAPlannerROS:
   max_scaling_factor: 0.2       # 최대 스케일링 팩터
   
   # 시뮬레이션 매개변수
-  sim_time: 5.0           # 경로 시뮬레이션 시간 (s)
+  sim_time: 7.0           # 경로 시뮬레이션 시간 (s)
   sim_granularity: 0.025  # 시뮬레이션 단계 크기 (m)
   vx_samples: 10          # x 속도 샘플 수
   vy_samples: 0           # y 속도 샘플 수 (비홀로노믹)

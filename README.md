@@ -4,14 +4,14 @@ gazebo환경에 husky와 velodyne 라이다 추가하고 dwa를 통한 장애물
 
 <div align="center">
   <div style="margin-bottom: 10px;">
-    <img src="docs/images/demo.gif" alt="drawing" width="80%"/>
+    <img src="docs/images/demo.gif" alt="drawing" width="100%"/>
     <p style="text-align: center;">시연영상</p>
   </div>
 </div>
 
 <div align="center">
   <div style="margin-bottom: 10px;">
-    <img src="docs/images/dwa_rqt_graph.png" width="50%">
+    <img src="docs/images/dwa_rqt_graph.png" width="70%">
     <p style="text-align: center;">rqt_graph</p>
   </div>
 </div>
@@ -24,10 +24,6 @@ catkin_make
 
 cd src
 git clone https://github.com/kyeonghyeon0314/gazebo_velodyne_dwa.git
-
-mv gazebo_velodyne_dwa/* .
-rm -rf gazebo_velodyne_dwa
-
 
 sudo apt-get install ros-noetic-gazebo-ros \
                      ros-noetic-roscpp \
@@ -43,6 +39,5 @@ cd ..
 catkin_make
 
 roslaunch husky_dwa_navigation husky_velodyne_dwa.launch
-
 
 ```
