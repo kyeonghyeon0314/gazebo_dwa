@@ -10,7 +10,7 @@ DWAPlannerROS:
   min_vel_theta: 0.2  # 최소 회전 속도 (rad/s)
   acc_lim_x: 3.0      # X축 가속도 제한 (m/s^2)
   acc_lim_y: 0.0      # Y축 가속도 제한 (m/s^2)
-  acc_lim_th: 6.0  # 회전 가속도 제한 (rad/s^2)
+  acc_lim_theta: 6.0  # 회전 가속도 제한 (rad/s^2)
   
   # 목표 도달 허용치
   xy_goal_tolerance: 1   # 위치 허용 오차 (m)
