@@ -8,7 +8,6 @@ oscillation_timeout: 10.0
 oscillation_distance: 0.5
 recovery_behavior_enabled: true
 clearing_rotation_allowed: true
-force_clearing_rotation_on_recovery: true  # 복구 시 항상 회전
 
 # 복구 동작 설정
 recovery_behaviors:
@@ -19,10 +18,7 @@ recovery_behaviors:
   - name: aggressive_reset
     type: clear_costmap_recovery/ClearCostmapRecovery
 
-
-# 3D 장애물 환경에 최적화된 복구 동작 
-conservative_reset:
-  reset_distance: 3.0
-  
-aggressive_reset:
-  reset_distance: 0.0
+# 복구 동작 파라미터
+clear_costmap_recovery:
+  reset_distance: 1.0
+  layer_names: ["voxel_layer"]
