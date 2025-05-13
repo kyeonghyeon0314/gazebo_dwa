@@ -4,8 +4,8 @@ gazebo환경에 husky와 velodyne 라이다 추가하고 dwa를 통한 장애물
 
 <div align="center">
   <div style="margin-bottom: 10px;">
-    <img src="docs/images/demo.gif" alt="drawing" width="100%"/>
-    <p style="text-align: center;">시연영상</p>
+    <img src="docs/video/dwa_test_4x.gif" alt="drawing" width="100%"/>
+    <p style="text-align: center;">시연영상 4배속</p>
   </div>
 </div>
 
