@@ -6,7 +6,8 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /Path2
+        - /PointCloud21
+        - /PointCloud22
       Splitter Ratio: 0.3478260934352875
     Tree Height: 665
   - Class: rviz/Selection
@@ -295,7 +296,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.009999999776482582
+      Size (m): 0.029999999329447746
       Style: Flat Squares
       Topic: /velodyne_points_range_limited
       Unreliable: false
@@ -458,5 +459,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1416
-  X: 1992
-  Y: 27
+  X: 894
+  Y: 276
