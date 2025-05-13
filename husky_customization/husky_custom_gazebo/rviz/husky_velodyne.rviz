@@ -469,7 +469,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.009999999776482582
+      Size (m): 0.029999999329447746
       Style: Flat Squares
       Topic: /velodyne_points
       Unreliable: false
@@ -504,7 +504,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 41.55839538574219
+      Distance: 49.19235610961914
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -520,9 +520,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.14479660987854
+      Pitch: 1.0547966957092285
       Target Frame: <Fixed Frame>
-      Yaw: 0.6426605582237244
+      Yaw: 0.6576659679412842
     Saved: ~
 Window Geometry:
   Displays:
@@ -541,4 +541,4 @@ Window Geometry:
     collapsed: true
   Width: 1416
   X: 1110
-  Y: 61
+  Y: 27

@@ -22,7 +22,7 @@ voxel_layer:
   # 벨로다인 포인트 클라우드 설정
   point_cloud_sensor:
     data_type: PointCloud2
-    topic: /velodyne_points_final  # 필터링된 최종 포인트 클라우드
+    topic: /velodyne_points_filtered  # 필터링된 최종 포인트 클라우드
     sensor_frame: velodyne
     marking: true                 # 장애물로 인식
     clearing: true                # 장애물 제거

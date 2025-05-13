@@ -17,36 +17,6 @@
     <param name="use_gpu" value="true"/>  <!-- GPU 사용 활성화 -->
   </node>
 
-  <!-- 음수 높이 필터 -->
-  <node pkg="nodelet" type="nodelet" name="negative_height_filter" args="load pcl/PassThrough pcl_manager" output="screen">
-    <remap from="~input" to="/velodyne_points_filtered" />
-    <remap from="~output" to="/velodyne_points_height_filtered" />
-    <param name="filter_field_name" value="z" />
-    <param name="filter_limit_min" value="-0.7" />
-    <param name="filter_limit_max" value="2.5" />
-    <param name="use_gpu" value="true"/>  <!-- GPU 사용 활성화 -->
-  </node>
-  
-  <!-- 원거리 제한 필터 -->
-  <node pkg="nodelet" type="nodelet" name="range_filter" args="load pcl/PassThrough pcl_manager" output="screen">
-    <remap from="~input" to="/velodyne_points_height_filtered" />
-    <remap from="~output" to="/velodyne_points_range_limited" />
-    <param name="filter_field_name" value="x" />
-    <param name="filter_limit_min" value="-8.0" />
-    <param name="filter_limit_max" value="8.0" />
-    <param name="use_gpu" value="true"/>  <!-- GPU 사용 활성화 -->
-  </node>
-
-  <!-- Y축 범위 제한 필터 -->
-  <node pkg="nodelet" type="nodelet" name="y_range_filter" args="load pcl/PassThrough pcl_manager" output="screen">
-    <remap from="~input" to="/velodyne_points_range_limited" />
-    <remap from="~output" to="/velodyne_points_final" />
-    <param name="filter_field_name" value="y" />
-    <param name="filter_limit_min" value="-8.0" />
-    <param name="filter_limit_max" value="8.0" />
-    <param name="use_gpu" value="true"/>  <!-- GPU 사용 활성화 -->
-  </node>
-
   <!-- Move Base 네비게이션 스택 사용 -->
   <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
     <rosparam file="$(find husky_dwa_navigation)/config/costmap_common_params.yaml" command="load" ns="global_costmap" />
