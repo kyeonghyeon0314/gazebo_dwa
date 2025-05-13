@@ -1,6 +1,0 @@
-CarrotPlanner:
-  # 목표 지점을 향한 직선 경로 생성
-  step_size: 0.1
-  min_dist_from_robot: 0.5
-  # 로컬 코스트맵 정보만 사용
-  use_only_local_costmap: true
