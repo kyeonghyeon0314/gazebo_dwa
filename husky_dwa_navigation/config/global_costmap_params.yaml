@@ -9,11 +9,8 @@ global_costmap:
   height: 100.0
   resolution: 0.1
   transform_tolerance: 0.5
+  reset_distance: 0.5
   track_unknown_space: true
-# global_costmap:
-#   global_frame: odom
-#   rolling_window: true
-#   track_unknown_space: true
 
   plugins:
     - {name: voxel_layer, type: "costmap_2d::VoxelLayer"}

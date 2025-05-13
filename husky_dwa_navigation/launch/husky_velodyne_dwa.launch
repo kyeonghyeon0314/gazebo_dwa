@@ -25,6 +25,15 @@
     <rosparam file="$(find husky_dwa_navigation)/config/global_costmap_params.yaml" command="load" />
     <rosparam file="$(find husky_dwa_navigation)/config/move_base_params.yaml" command="load" />
     <rosparam file="$(find husky_dwa_navigation)/config/dwa_local_planner_params.yaml" command="load" />
+    
+    <param name="clearing_rotation_allowed" value="true" />
+    <param name="conservative_clear_costmap" value="true" />
+    <param name="recovery_behavior_enabled" value="true" />
+
+    <param name="controller_patience" value="15.0" />
+    <param name="planner_patience" value="5.0" />
+    <param name="oscillation_timeout" value="10.0" />
+    <param name="oscillation_distance" value="0.5" />
 
     <!-- 로컬 플래너 설정 -->
     <param name="base_local_planner" value="dwa_local_planner/DWAPlannerROS" />

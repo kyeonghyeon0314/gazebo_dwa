@@ -5,10 +5,13 @@ local_costmap:
   publish_frequency: 10
   static_map: false
   rolling_window: true
-  width: 20.0  # 더 넓은 로컬 코스트맵
-  height: 20.0
+  width: 10.0  
+  height: 10.0
   resolution: 0.05
   transform_tolerance: 0.5
+  reset_distance: 0.5
+  track_unknown_space: true
+
 
   
   plugins:
