@@ -18,19 +18,15 @@ use_carrot_planner_outside_map: true  # costmap 외부에서 CarrotPlanner 활�
 recovery_behaviors:
   - name: conservative_reset
     type: clear_costmap_recovery/ClearCostmapRecovery
-  - name: rotate_recovery
-    type: rotate_recovery/RotateRecovery
   - name: aggressive_reset
     type: clear_costmap_recovery/ClearCostmapRecovery
+
+# rotate_recovery를 완전히 비활성화
+rotate_recovery:
+  enabled: false
+
 
 # 복구 동작 파라미터
 clear_costmap_recovery:
   reset_distance: 1.0
   layer_names: ["voxel_layer"]
-
-
-# CarrotPlanner 파라미터
-CarrotPlanner:
-  step_size: 0.2
-  min_dist_from_robot: 0.1
-  carrot_distance: 0.5  # 로봇 앞에 당근 마커를 배치할 거리

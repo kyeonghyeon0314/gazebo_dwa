@@ -10,6 +10,7 @@ from nav_msgs.msg import OccupancyGrid
 from actionlib_msgs.msg import GoalStatusArray
 from dynamic_reconfigure.msg import Config, StrParameter
 from dynamic_reconfigure.srv import Reconfigure
+import rosgraph_msgs.msg
 
 class PlannerSwitcher:
     def __init__(self):
@@ -24,7 +25,13 @@ class PlannerSwitcher:
         self.default_planner = rospy.get_param('~default_planner', 'global_planner/GlobalPlanner')
         self.alternate_planner = rospy.get_param('~alternate_planner', 'carrot_planner/CarrotPlanner')
         self.update_rate = rospy.get_param('~update_rate', 2.0)  # 중간 지점 업데이트 주기 (Hz)
-        self.goal_distance_threshold = rospy.get_param('~goal_distance_threshold', 2.0)  # 최종 목표 전환 거리 임계값
+        
+        # 장애물 회피 관련 변수
+        self.consecutive_failures = 0
+        self.plan_failure_count = 0
+        self.last_failure_time = rospy.Time(0)
+        self.failure_shift_direction = 1  # 1: 동쪽(오른쪽), -1: 서쪽(왼쪽)
+        self.failure_shift_distance = 1.0  # 기본 이동 거리 (미터)
         
         # 상태 변수
         self.costmap = None
@@ -38,12 +45,13 @@ class PlannerSwitcher:
         # 구독자 설정
         self.costmap_sub = rospy.Subscriber(self.costmap_topic, OccupancyGrid, self.costmap_callback)
         
+        # 로그 메시지 구독
+        self.log_sub = rospy.Subscriber("/rosout", rosgraph_msgs.msg.Log, self.log_callback)
+    
+
         # 목표 지점 구독
         self.goal_sub = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.goal_callback)
         self.current_goal_sub = rospy.Subscriber('/move_base/current_goal', PoseStamped, self.current_goal_callback)
-        
-        # move_base 상태 구독 추가
-        self.status_sub = rospy.Subscriber('/move_base/status', GoalStatusArray, self.status_callback)
         
         # 중간 목표 지점 발행자
         self.intermediate_goal_pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=1)
@@ -53,18 +61,28 @@ class PlannerSwitcher:
         
         rospy.loginfo("플래너 전환기 초기화 완료. 목표 지점이 costmap 외부에 있을 경우 주기적으로 중간 목표를 업데이트합니다.")
     
-    def status_callback(self, status_msg):
+    def log_callback(self, log_msg):
         """
-        move_base 상태 콜백
+        ROS 로그 메시지를 모니터링하여 'Failed to get a plan' 에러를 감지
         """
-        if status_msg.status_list:
-            self.move_base_status = status_msg.status_list[-1].status
-            
-            # 중간 목표에 도달한 경우 (3: SUCCEEDED)
-            if self.intermediate_goal_active and self.original_goal is not None and self.move_base_status == 3:
-                rospy.loginfo("중간 목표에 도달했습니다. 다음 중간 목표를 계산합니다.")
-                # 다음 중간 목표를 계산하도록 플래그 설정 (바로 계산하지 않고 타이머에서 처리)
-                self.last_goal_reached = True
+        # 'Failed to get a plan' 메시지 감지
+        if "Failed to get a plan" in log_msg.msg:
+            current_time = rospy.Time.now()
+        
+            # 최근 5초 이내의 실패만 카운트 (오래된 실패는 리셋)
+            if (current_time - self.last_plan_failure_time).to_sec() > 5.0:
+                self.plan_failure_count = 0
+        
+            self.plan_failure_count += 1
+            self.last_plan_failure_time = current_time
+        
+            rospy.logwarn("플랜 실패 감지: %d번째 (%s)", self.plan_failure_count, log_msg.msg)
+        
+            # 2번 연속 실패하면 shift_intermediate_goal 실행
+            if self.plan_failure_count >= 2:
+                rospy.logwarn("연속 %d번 경로 생성 실패: 중간 목표 위치를 이동합니다", self.plan_failure_count)
+                self.shift_intermediate_goal()
+                self.plan_failure_count = 0  # 카운트 리셋
     
     def update_intermediate_goal(self, event=None):
         """
@@ -101,13 +119,11 @@ class PlannerSwitcher:
                           goal_x > map_origin_x + map_width or
                           goal_y > map_origin_y + map_height)
             
-            # 로봇과 목표 사이의 거리 계산
-            robot_to_goal_dist = np.sqrt((robot_pose.x - goal_x)**2 + (robot_pose.y - goal_y)**2)
-            
-            # 원본 목표가 costmap 내부에 있거나 로봇이 충분히 가까워진 경우, 원본 목표로 전환
-            if not is_outside or robot_to_goal_dist < self.goal_distance_threshold:
+            # 변경된 부분: 로봇과 목표 사이의 거리는 더 이상 확인하지 않음
+            # 오직 목표가 costmap 내부에 있는 경우에만 원본 목표로 전환
+            if not is_outside:
                 if self.intermediate_goal_active:
-                    rospy.loginfo("목표가 costmap 내부에 있거나 로봇이 충분히 가까워졌습니다(%.2fm). 원본 목표로 전환합니다.", robot_to_goal_dist)
+                    rospy.loginfo("목표가 costmap 내부에 있습니다. 원본 목표로 전환합니다.")
                     self.switch_to_original_goal()
                 return
             
@@ -176,6 +192,76 @@ class PlannerSwitcher:
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
             rospy.logwarn("목표 지점 변환 중 오류: %s", str(e))
     
+    def shift_intermediate_goal(self):
+        """
+    장애물로 인해 경로 생성이 실패할 때 중간 목표 지점을 측면으로 이동시킨다.
+        중간 목표를 기준으로 이동하는 방식으로 변경됨.
+        """
+        if not self.have_costmap or self.current_goal is None:
+            return
+    
+        # 현재 로봇 위치 가져오기
+        robot_pose = self.get_robot_pose()
+        if robot_pose is None:
+            return
+    
+        try:
+            # 현재 중간 목표 위치
+            current_intermediate_x = self.current_goal.pose.position.x
+            current_intermediate_y = self.current_goal.pose.position.y
+        
+            # 로봇에서 현재 중간 목표까지의 방향 벡터
+            intermediate_direction_x = current_intermediate_x - robot_pose.x
+            intermediate_direction_y = current_intermediate_y - robot_pose.y
+        
+            # 벡터 정규화
+            direction_length = np.sqrt(intermediate_direction_x**2 + intermediate_direction_y**2)
+            if direction_length > 0:
+                intermediate_direction_x /= direction_length
+                intermediate_direction_y /= direction_length
+        
+            # 현재 진행 방향에 수직인 벡터 계산
+            perpendicular_x = -intermediate_direction_y  # 오른쪽 방향
+            perpendicular_y = intermediate_direction_x   # 위쪽 방향
+        
+            # 일정 거리만큼 이동 (항상 1m)
+            shift_distance = 1.0
+        
+            # 새 중간 목표 위치 계산
+            new_intermediate_x = current_intermediate_x + perpendicular_x * shift_distance * self.failure_shift_direction
+            new_intermediate_y = current_intermediate_y + perpendicular_y * shift_distance * self.failure_shift_direction
+        
+            # 새 중간 목표 생성
+            intermediate_goal = PoseStamped()
+            intermediate_goal.header.frame_id = self.costmap.header.frame_id
+            intermediate_goal.header.stamp = rospy.Time.now()
+            intermediate_goal.pose.position.x = new_intermediate_x
+            intermediate_goal.pose.position.y = new_intermediate_y
+            intermediate_goal.pose.position.z = self.current_goal.pose.position.z
+        
+            # 방향은 기존 중간 목표와 동일하게 유지
+            intermediate_goal.pose.orientation = self.current_goal.pose.orientation
+        
+            # GlobalPlanner 사용 확인 
+            if not self.using_default_planner:
+                self.switch_planner(self.default_planner)
+                self.using_default_planner = True
+        
+            # 중간 목표 발행
+            self.intermediate_goal_pub.publish(intermediate_goal)
+            self.last_intermediate_goal_time = rospy.Time.now()
+        
+            # 다음 번 실패 시 반대 방향으로 시도하기 위해 방향 전환
+            self.failure_shift_direction *= -1
+        
+            rospy.loginfo("장애물 회피를 위해 중간 목표 이동: (%.2f, %.2f) -> (%.2f, %.2f)", 
+                         current_intermediate_x, current_intermediate_y,
+                         new_intermediate_x, new_intermediate_y)
+        
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
+            rospy.logwarn("목표 지점 변환 중 오류: %s", str(e))
+
+
     def switch_to_original_goal(self):
         """
         원래 목표로 전환하는 함수
@@ -223,6 +309,7 @@ class PlannerSwitcher:
         # 원본 목표 저장
         self.original_goal = goal_msg
         self.intermediate_goal_active = False
+        self.consecutive_failures = 0  # 새 목표 설정시 실패 카운터 초기화
         
         # 중간 목표 업데이트 트리거
         self.update_intermediate_goal()
@@ -245,45 +332,6 @@ class PlannerSwitcher:
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
             rospy.logwarn(f"로봇 위치 확인 중 오류: {str(e)}")
             return None
-    
-    def check_goal_position(self, goal_msg):
-        """
-        목표 위치가 costmap 내부인지 외부인지 확인
-        (이 함수는 더 이상 중간 목표를 직접 발행하지 않음 - update_intermediate_goal로 대체됨)
-        """
-        if not self.have_costmap:
-            rospy.logdebug("아직 costmap을 받지 못했습니다. 목표 지점 위치를 확인할 수 없습니다.")
-            return False
-        
-        # 목표 지점의 좌표를 costmap 프레임으로 변환
-        try:
-            # 만약 goal_msg의 프레임이 costmap과 다르다면 변환
-            if goal_msg.header.frame_id != self.costmap.header.frame_id:
-                goal_in_costmap_frame = self.tf_buffer.transform(goal_msg, self.costmap.header.frame_id, rospy.Duration(1.0))
-            else:
-                goal_in_costmap_frame = goal_msg
-            
-            # 목표 지점 좌표
-            goal_x = goal_in_costmap_frame.pose.position.x
-            goal_y = goal_in_costmap_frame.pose.position.y
-            
-            # costmap 경계 확인
-            map_origin_x = self.costmap.info.origin.position.x
-            map_origin_y = self.costmap.info.origin.position.y
-            map_width = self.costmap.info.width * self.costmap.info.resolution
-            map_height = self.costmap.info.height * self.costmap.info.resolution
-            
-            # 목표 지점이 costmap 경계 밖에 있는지 확인
-            is_outside = (goal_x < map_origin_x or 
-                          goal_y < map_origin_y or
-                          goal_x > map_origin_x + map_width or
-                          goal_y > map_origin_y + map_height)
-            
-            return is_outside
-            
-        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-            rospy.logwarn("목표 지점 변환 중 오류: %s", str(e))
-            return False
     
     def find_intersection_with_boundary(self, x1, y1, x2, y2, min_x, min_y, max_x, max_y):
         """
