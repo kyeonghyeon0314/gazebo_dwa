@@ -4,8 +4,10 @@
 import rospy
 import tf2_ros
 import tf2_geometry_msgs
+import numpy as np
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import OccupancyGrid
+from actionlib_msgs.msg import GoalStatusArray
 from dynamic_reconfigure.msg import Config, StrParameter
 from dynamic_reconfigure.srv import Reconfigure
 
@@ -16,17 +18,22 @@ class PlannerSwitcher:
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
         
         # 파라미터 로드
-        self.costmap_topic = rospy.get_param('~global_costmap_topic', '/move_base/global_costmap/costmap')
+        self.costmap_topic = rospy.get_param('~local_costmap_topic', '/move_base/local_costmap/costmap')
         self.switch_service = rospy.get_param('~switch_service', '/move_base/set_parameters')
         self.planner_param = rospy.get_param('~planner_type_parameter', '/move_base/base_global_planner')
         self.default_planner = rospy.get_param('~default_planner', 'global_planner/GlobalPlanner')
         self.alternate_planner = rospy.get_param('~alternate_planner', 'carrot_planner/CarrotPlanner')
+        self.update_rate = rospy.get_param('~update_rate', 2.0)  # 중간 지점 업데이트 주기 (Hz)
+        self.goal_distance_threshold = rospy.get_param('~goal_distance_threshold', 2.0)  # 최종 목표 전환 거리 임계값
         
         # 상태 변수
         self.costmap = None
         self.current_goal = None
+        self.original_goal = None
         self.using_default_planner = True
         self.have_costmap = False
+        self.intermediate_goal_active = False
+        self.move_base_status = 0  # 0: PENDING, 1: ACTIVE, 2: PREEMPTED, 3: SUCCEEDED, 4: ABORTED ...
         
         # 구독자 설정
         self.costmap_sub = rospy.Subscriber(self.costmap_topic, OccupancyGrid, self.costmap_callback)
@@ -35,8 +42,167 @@ class PlannerSwitcher:
         self.goal_sub = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.goal_callback)
         self.current_goal_sub = rospy.Subscriber('/move_base/current_goal', PoseStamped, self.current_goal_callback)
         
-        rospy.loginfo("플래너 전환기 초기화 완료. 목표 지점 위치에 따라 %s와 %s 사이를 전환합니다.", 
-                     self.default_planner, self.alternate_planner)
+        # move_base 상태 구독 추가
+        self.status_sub = rospy.Subscriber('/move_base/status', GoalStatusArray, self.status_callback)
+        
+        # 중간 목표 지점 발행자
+        self.intermediate_goal_pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=1)
+        
+        # 중간 목표 업데이트 타이머
+        self.update_timer = rospy.Timer(rospy.Duration(1.0 / self.update_rate), self.update_intermediate_goal)
+        
+        rospy.loginfo("플래너 전환기 초기화 완료. 목표 지점이 costmap 외부에 있을 경우 주기적으로 중간 목표를 업데이트합니다.")
+    
+    def status_callback(self, status_msg):
+        """
+        move_base 상태 콜백
+        """
+        if status_msg.status_list:
+            self.move_base_status = status_msg.status_list[-1].status
+            
+            # 중간 목표에 도달한 경우 (3: SUCCEEDED)
+            if self.intermediate_goal_active and self.original_goal is not None and self.move_base_status == 3:
+                rospy.loginfo("중간 목표에 도달했습니다. 다음 중간 목표를 계산합니다.")
+                # 다음 중간 목표를 계산하도록 플래그 설정 (바로 계산하지 않고 타이머에서 처리)
+                self.last_goal_reached = True
+    
+    def update_intermediate_goal(self, event=None):
+        """
+        중간 목표를 주기적으로 업데이트하는 타이머 콜백
+        """
+        # 원본 목표가 없거나 costmap을 아직 받지 못했다면 무시
+        if self.original_goal is None or not self.have_costmap:
+            return
+            
+        # 현재 로봇의 위치를 가져오기
+        robot_pose = self.get_robot_pose()
+        if robot_pose is None:
+            return
+            
+        # 원본 목표 위치를 costmap 프레임으로 변환
+        try:
+            if self.original_goal.header.frame_id != self.costmap.header.frame_id:
+                goal_in_costmap_frame = self.tf_buffer.transform(self.original_goal, self.costmap.header.frame_id, rospy.Duration(1.0))
+            else:
+                goal_in_costmap_frame = self.original_goal
+                
+            goal_x = goal_in_costmap_frame.pose.position.x
+            goal_y = goal_in_costmap_frame.pose.position.y
+            
+            # costmap 경계 확인
+            map_origin_x = self.costmap.info.origin.position.x
+            map_origin_y = self.costmap.info.origin.position.y
+            map_width = self.costmap.info.width * self.costmap.info.resolution
+            map_height = self.costmap.info.height * self.costmap.info.resolution
+            
+            # 목표 지점이 costmap 경계 밖에 있는지 확인
+            is_outside = (goal_x < map_origin_x or 
+                          goal_y < map_origin_y or
+                          goal_x > map_origin_x + map_width or
+                          goal_y > map_origin_y + map_height)
+            
+            # 로봇과 목표 사이의 거리 계산
+            robot_to_goal_dist = np.sqrt((robot_pose.x - goal_x)**2 + (robot_pose.y - goal_y)**2)
+            
+            # 원본 목표가 costmap 내부에 있거나 로봇이 충분히 가까워진 경우, 원본 목표로 전환
+            if not is_outside or robot_to_goal_dist < self.goal_distance_threshold:
+                if self.intermediate_goal_active:
+                    rospy.loginfo("목표가 costmap 내부에 있거나 로봇이 충분히 가까워졌습니다(%.2fm). 원본 목표로 전환합니다.", robot_to_goal_dist)
+                    self.switch_to_original_goal()
+                return
+            
+            # 중간 목표가 활성화되어 있고, 마지막 업데이트 후 충분한 시간이 지나지 않았다면 무시
+            if self.intermediate_goal_active and hasattr(self, 'last_intermediate_goal_time') and \
+               (rospy.Time.now() - self.last_intermediate_goal_time).to_sec() < 3.0:  # 3초마다 업데이트
+                return
+            
+            # 로봇에서 목표까지의 직선과 costmap 경계의 교차점 계산
+            intersection_point = self.find_intersection_with_boundary(
+                robot_pose.x, robot_pose.y, 
+                goal_x, goal_y,
+                map_origin_x, map_origin_y, 
+                map_origin_x + map_width, map_origin_y + map_height
+            )
+            
+            if intersection_point:
+                # 이전 중간 목표와 새로운 중간 목표 사이의 거리가 충분히 크면 업데이트
+                update_needed = True
+                if self.intermediate_goal_active and self.current_goal is not None:
+                    current_intermediate_x = self.current_goal.pose.position.x
+                    current_intermediate_y = self.current_goal.pose.position.y
+                    dist_to_new_intermediate = np.sqrt((intersection_point[0] - current_intermediate_x)**2 + 
+                                                       (intersection_point[1] - current_intermediate_y)**2)
+                    update_needed = dist_to_new_intermediate > 1.0  # 1미터 이상 차이나면 업데이트
+                
+                if update_needed or hasattr(self, 'last_goal_reached'):
+                    # 새로운 중간 목표 생성 및 발행
+                    intermediate_goal = PoseStamped()
+                    intermediate_goal.header.frame_id = self.costmap.header.frame_id
+                    intermediate_goal.header.stamp = rospy.Time.now()
+                    intermediate_goal.pose.position.x = intersection_point[0]
+                    intermediate_goal.pose.position.y = intersection_point[1]
+                    intermediate_goal.pose.position.z = goal_in_costmap_frame.pose.position.z
+                    
+                    # 방향은 원래 목표를 향하도록 설정
+                    direction = np.arctan2(goal_y - intersection_point[1], 
+                                          goal_x - intersection_point[0])
+                    
+                    # 쿼터니언으로 변환 (z축 회전만 고려)
+                    intermediate_goal.pose.orientation.z = np.sin(direction / 2)
+                    intermediate_goal.pose.orientation.w = np.cos(direction / 2)
+                    
+                    # GlobalPlanner 사용 확인
+                    if not self.using_default_planner:
+                        self.switch_planner(self.default_planner)
+                        self.using_default_planner = True
+                    
+                    # 중간 목표 발행
+                    self.intermediate_goal_pub.publish(intermediate_goal)
+                    self.last_intermediate_goal_time = rospy.Time.now()
+                    self.intermediate_goal_active = True
+                    if hasattr(self, 'last_goal_reached'):
+                        delattr(self, 'last_goal_reached')
+                    
+                    # 거리 로깅 추가
+                    robot_to_intermediate_dist = np.sqrt((robot_pose.x - intersection_point[0])**2 + 
+                                                         (robot_pose.y - intersection_point[1])**2)
+                    intermediate_to_goal_dist = np.sqrt((intersection_point[0] - goal_x)**2 + 
+                                                        (intersection_point[1] - goal_y)**2)
+                    
+                    rospy.loginfo("새 중간 목표 설정: (%.2f, %.2f) - 로봇으로부터 %.2fm, 목표까지 %.2fm", 
+                                 intersection_point[0], intersection_point[1],
+                                 robot_to_intermediate_dist, intermediate_to_goal_dist)
+        
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
+            rospy.logwarn("목표 지점 변환 중 오류: %s", str(e))
+    
+    def switch_to_original_goal(self):
+        """
+        원래 목표로 전환하는 함수
+        """
+        if self.original_goal is None:
+            rospy.logwarn("원래 목표가 없습니다.")
+            return
+            
+        rospy.loginfo("원래 목표로 전환합니다: (%.2f, %.2f)", 
+                     self.original_goal.pose.position.x, 
+                     self.original_goal.pose.position.y)
+                     
+        # CarrotPlanner로 전환
+        self.switch_planner(self.alternate_planner)
+        self.using_default_planner = False
+        self.intermediate_goal_active = False
+        
+        # 원래 목표의 타임스탬프 업데이트
+        original_goal_updated = PoseStamped()
+        original_goal_updated.header = self.original_goal.header
+        original_goal_updated.header.stamp = rospy.Time.now()  # 현재 시간으로 업데이트
+        original_goal_updated.pose = self.original_goal.pose
+        
+        # 약간의 지연 후 원래 목표 발행 (move_base가 이전 목표를 처리할 시간을 주기 위함)
+        rospy.sleep(0.5)
+        self.intermediate_goal_pub.publish(original_goal_updated)
+        rospy.loginfo("원래 목표를 발행했습니다.")
     
     def costmap_callback(self, costmap_msg):
         """
@@ -44,32 +210,50 @@ class PlannerSwitcher:
         """
         self.costmap = costmap_msg
         self.have_costmap = True
-        
-        # costmap이 업데이트되면 현재 목표 위치에 따라 플래너 재확인
-        if self.current_goal is not None:
-            self.check_goal_position(self.current_goal)
     
     def goal_callback(self, goal_msg):
         """
         새 목표 지점이 설정되었을 때의 콜백
         """
-        # 새 목표 지점 설정 시 해당 위치에 따라 플래너 전환
-        self.check_goal_position(goal_msg)
+        # 중간 목표를 처리 중인 경우는 무시 (우리가 게시한 중간 목표에 대한 피드백 방지)
+        if hasattr(self, 'last_intermediate_goal_time') and \
+           (rospy.Time.now() - self.last_intermediate_goal_time).to_sec() < 0.5:
+            return
+            
+        # 원본 목표 저장
+        self.original_goal = goal_msg
+        self.intermediate_goal_active = False
+        
+        # 중간 목표 업데이트 트리거
+        self.update_intermediate_goal()
     
     def current_goal_callback(self, goal_msg):
         """
         현재 목표 지점 업데이트 콜백
         """
         self.current_goal = goal_msg
-        self.check_goal_position(goal_msg)
+    
+    def get_robot_pose(self):
+        """
+        로봇의 현재 위치를 가져옴
+        """
+        try:
+            trans = self.tf_buffer.lookup_transform(
+                self.costmap.header.frame_id, 'base_link', rospy.Time(0), rospy.Duration(1.0)
+            )
+            return trans.transform.translation
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
+            rospy.logwarn(f"로봇 위치 확인 중 오류: {str(e)}")
+            return None
     
     def check_goal_position(self, goal_msg):
         """
-        목표 위치가 costmap 내부인지 외부인지 확인하고 플래너 전환
+        목표 위치가 costmap 내부인지 외부인지 확인
+        (이 함수는 더 이상 중간 목표를 직접 발행하지 않음 - update_intermediate_goal로 대체됨)
         """
         if not self.have_costmap:
             rospy.logdebug("아직 costmap을 받지 못했습니다. 목표 지점 위치를 확인할 수 없습니다.")
-            return
+            return False
         
         # 목표 지점의 좌표를 costmap 프레임으로 변환
         try:
@@ -95,21 +279,74 @@ class PlannerSwitcher:
                           goal_x > map_origin_x + map_width or
                           goal_y > map_origin_y + map_height)
             
-            # 필요에 따라 플래너 전환
-            if is_outside and self.using_default_planner:
-                rospy.loginfo("목표 지점이 글로벌 costmap 경계 밖에 있습니다. CarrotPlanner로 전환합니다.")
-                rospy.loginfo("목표 위치: (%.2f, %.2f), 맵 경계: (%.2f, %.2f) ~ (%.2f, %.2f)", 
-                              goal_x, goal_y, map_origin_x, map_origin_y, 
-                              map_origin_x + map_width, map_origin_y + map_height)
-                self.switch_planner(self.alternate_planner)
-                self.using_default_planner = False
-            elif not is_outside and not self.using_default_planner:
-                rospy.loginfo("목표 지점이 글로벌 costmap 경계 내부에 있습니다. GlobalPlanner로 전환합니다.")
-                self.switch_planner(self.default_planner)
-                self.using_default_planner = True
+            return is_outside
             
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
             rospy.logwarn("목표 지점 변환 중 오류: %s", str(e))
+            return False
+    
+    def find_intersection_with_boundary(self, x1, y1, x2, y2, min_x, min_y, max_x, max_y):
+        """
+        직선(x1,y1 -> x2,y2)과 직사각형 경계의 교차점을 계산
+        """
+        # 직선의 방정식: y = mx + b
+        if x2 - x1 == 0:  # 수직선
+            if min_x <= x1 <= max_x:
+                # y 범위 내에서 교차점 찾기
+                if y1 < y2:  # 위로 향하는 경우
+                    return [x1, max_y] if y1 < max_y < y2 else None
+                else:  # 아래로 향하는 경우
+                    return [x1, min_y] if y2 < min_y < y1 else None
+            return None
+        
+        m = (y2 - y1) / (x2 - x1)  # 기울기
+        b = y1 - m * x1  # y절편
+        
+        # 직사각형의 네 변과의 교차점 계산
+        intersections = []
+        
+        # 왼쪽 변: x = min_x
+        y_at_left = m * min_x + b
+        if min_y <= y_at_left <= max_y:
+            intersections.append((min_x, y_at_left))
+        
+        # 오른쪽 변: x = max_x
+        y_at_right = m * max_x + b
+        if min_y <= y_at_right <= max_y:
+            intersections.append((max_x, y_at_right))
+        
+        # 아래쪽 변: y = min_y
+        x_at_bottom = (min_y - b) / m if m != 0 else None
+        if x_at_bottom is not None and min_x <= x_at_bottom <= max_x:
+            intersections.append((x_at_bottom, min_y))
+        
+        # 위쪽 변: y = max_y
+        x_at_top = (max_y - b) / m if m != 0 else None
+        if x_at_top is not None and min_x <= x_at_top <= max_x:
+            intersections.append((x_at_top, max_y))
+        
+        if not intersections:
+            return None
+        
+        # 로봇에서 목표를 향하는 방향에 있는 첫 번째 교차점 찾기
+        robot_to_goal_vector = np.array([x2 - x1, y2 - y1])
+        robot_to_goal_dist = np.linalg.norm(robot_to_goal_vector)
+        
+        closest_intersection = None
+        closest_dist = float('inf')
+        
+        for ix, iy in intersections:
+            robot_to_intersection_vector = np.array([ix - x1, iy - y1])
+            # 같은 방향인지 확인 (내적이 양수)
+            dot_product = np.dot(robot_to_goal_vector, robot_to_intersection_vector)
+            
+            if dot_product > 0:  # 같은 방향
+                dist = np.linalg.norm(robot_to_intersection_vector)
+                if dist < closest_dist and dist < robot_to_goal_dist:
+                    closest_dist = dist
+                    closest_intersection = (ix, iy)
+        
+        return closest_intersection
     
     def switch_planner(self, planner_type):
         """
