@@ -5,6 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
+        - /PointCloud24
       Splitter Ratio: 0.3478260934352875
     Tree Height: 954
   - Class: rviz/Selection
@@ -441,7 +442,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.029999999329447746
+      Size (m): 0.05000000074505806
       Style: Flat Squares
       Topic: /velodyne_points_filtered
       Unreliable: false
@@ -504,7 +505,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 41.93777084350586
+      Distance: 10.410099029541016
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -512,17 +513,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: -2.3350749015808105
-        Y: -0.33818671107292175
-        Z: -2.9475693702697754
+        X: 3.928591251373291
+        Y: 1.1784547567367554
+        Z: 14.678189277648926
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.2647968530654907
+      Pitch: 0.36979666352272034
       Target Frame: <Fixed Frame>
-      Yaw: 0.08266647905111313
+      Yaw: 3.205841541290283
     Saved: ~
 Window Geometry:
   Displays:
