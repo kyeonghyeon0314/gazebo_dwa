@@ -23,15 +23,28 @@ class PlannerSwitcher:
         self.switch_service = rospy.get_param('~switch_service', '/move_base/set_parameters')
         self.planner_param = rospy.get_param('~planner_type_parameter', '/move_base/base_global_planner')
         self.default_planner = rospy.get_param('~default_planner', 'global_planner/GlobalPlanner')
-        self.alternate_planner = rospy.get_param('~alternate_planner', 'carrot_planner/CarrotPlanner')
+        # GlobalPlanner 사용
+        self.alternate_planner = rospy.get_param('~alternate_planner', 'global_planner/GlobalPlanner')
         self.update_rate = rospy.get_param('~update_rate', 2.0)  # 중간 지점 업데이트 주기 (Hz)
+        
+        # 목표 식별을 위한 특수 z 좌표 값 설정
+        self.INTERMEDIATE_GOAL_Z = 0.5  # 중간 목표 식별용 특수 z 값
+        self.ORIGINAL_GOAL_Z = None       # 원본 목표의 z 값 (원래 값 유지)
         
         # 장애물 회피 관련 변수
         self.consecutive_failures = 0
         self.plan_failure_count = 0
         self.last_failure_time = rospy.Time(0)
+        self.last_plan_failure_time = rospy.Time(0)  # 추가: last_plan_failure_time 초기화
         self.failure_shift_direction = 1  # 1: 동쪽(오른쪽), -1: 서쪽(왼쪽)
         self.failure_shift_distance = 1.0  # 기본 이동 거리 (미터)
+
+        # 추가: 최대 시도 횟수 제한
+        self.max_shift_attempts = 6  # 최대 3번의 왼쪽-오른쪽 시도 (총 6번)
+        self.current_shift_attempts = 0
+        self.increasing_shift_distance = True  # 거리를 점진적으로 증가시킬지 결정
+        self.base_shift_distance = 1.0  # 기본 이동 거리
+        self.shift_multiplier = 1.0     # 거리 증가를 위한 곱셈 인자
         
         # 상태 변수
         self.costmap = None
@@ -48,7 +61,6 @@ class PlannerSwitcher:
         # 로그 메시지 구독
         self.log_sub = rospy.Subscriber("/rosout", rosgraph_msgs.msg.Log, self.log_callback)
     
-
         # 목표 지점 구독
         self.goal_sub = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.goal_callback)
         self.current_goal_sub = rospy.Subscriber('/move_base/current_goal', PoseStamped, self.current_goal_callback)
@@ -63,26 +75,60 @@ class PlannerSwitcher:
     
     def log_callback(self, log_msg):
         """
-        ROS 로그 메시지를 모니터링하여 'Failed to get a plan' 에러를 감지
+        ROS 로그 메시지를 모니터링하여 'Failed to get a plan.' 에러를 감지
+        수정 버전: 자신의 로그 메시지를 재감지하는 문제 해결
         """
-        # 'Failed to get a plan' 메시지 감지
-        if "Failed to get a plan" in log_msg.msg:
+        # 1. 확인: 자신이 출력한 로그 메시지는 무시 (로그 중첩 방지)
+        if "플랜 실패 감지" in log_msg.msg or "장애물 회피" in log_msg.msg:
+            return
+        
+        # 2. 확인: 메시지 출처가 move_base인지 확인 (플래너 관련 메시지만 처리)
+        if "/move_base" not in log_msg.name:
+            return
+        
+        # 3. 확인: 정확한 오류 문자열만 감지
+        if "Failed to get a plan." in log_msg.msg:
             current_time = rospy.Time.now()
         
-            # 최근 5초 이내의 실패만 카운트 (오래된 실패는 리셋)
+            # 최근 처리한 실패와의 시간 간격 확인 (짧은 시간 내 중복 처리 방지)
+            if (current_time - self.last_plan_failure_time).to_sec() < 1.0:  # 1초 이내 중복 방지
+                return
+            
+            # 기존 카운터 로직
             if (current_time - self.last_plan_failure_time).to_sec() > 5.0:
                 self.plan_failure_count = 0
         
             self.plan_failure_count += 1
             self.last_plan_failure_time = current_time
         
-            rospy.logwarn("플랜 실패 감지: %d번째 (%s)", self.plan_failure_count, log_msg.msg)
+            rospy.logwarn("플랜 실패 감지: %d번째 (원본 오류: Failed to get a plan.)", 
+                         self.plan_failure_count)
+        
+            # 추가: 로그 디버깅을 위한 정보 출력
+            rospy.logdebug("로그 출처: %s, 레벨: %d, 시간: %.2f", 
+                          log_msg.name, log_msg.level, log_msg.header.stamp.to_sec())
         
             # 2번 연속 실패하면 shift_intermediate_goal 실행
             if self.plan_failure_count >= 2:
-                rospy.logwarn("연속 %d번 경로 생성 실패: 중간 목표 위치를 이동합니다", self.plan_failure_count)
+                rospy.logwarn("연속 %d번 경로 생성 실패: 중간 목표 위치를 이동합니다", 
+                             self.plan_failure_count)
+            
+                # 중요: 실행 전 카운터 리셋 (중복 실행 방지)
+                self.plan_failure_count = 0
+            
+                # 시도 사이에 약간의 지연 추가 (시스템이 안정화될 시간 제공)
+                rospy.sleep(0.5)
+            
+                # 경로 실패 처리 함수 호출
                 self.shift_intermediate_goal()
-                self.plan_failure_count = 0  # 카운트 리셋
+    
+    def is_intermediate_goal(self, goal_msg):
+        """
+        주어진 목표가 중간 목표인지 확인하는 함수
+        z 좌표 값으로 구분
+        """
+        # z 좌표가 중간 목표용 특수 값인지 확인
+        return abs(goal_msg.pose.position.z - self.INTERMEDIATE_GOAL_Z) < 0.1
     
     def update_intermediate_goal(self, event=None):
         """
@@ -119,8 +165,7 @@ class PlannerSwitcher:
                           goal_x > map_origin_x + map_width or
                           goal_y > map_origin_y + map_height)
             
-            # 변경된 부분: 로봇과 목표 사이의 거리는 더 이상 확인하지 않음
-            # 오직 목표가 costmap 내부에 있는 경우에만 원본 목표로 전환
+            # 목표가 costmap 내부에 있는 경우에만 원본 목표로 전환
             if not is_outside:
                 if self.intermediate_goal_active:
                     rospy.loginfo("목표가 costmap 내부에 있습니다. 원본 목표로 전환합니다.")
@@ -157,7 +202,9 @@ class PlannerSwitcher:
                     intermediate_goal.header.stamp = rospy.Time.now()
                     intermediate_goal.pose.position.x = intersection_point[0]
                     intermediate_goal.pose.position.y = intersection_point[1]
-                    intermediate_goal.pose.position.z = goal_in_costmap_frame.pose.position.z
+                    
+                    # 중간 목표 식별을 위한 특수 z 값 설정
+                    intermediate_goal.pose.position.z = self.INTERMEDIATE_GOAL_Z
                     
                     # 방향은 원래 목표를 향하도록 설정
                     direction = np.arctan2(goal_y - intersection_point[1], 
@@ -191,13 +238,82 @@ class PlannerSwitcher:
         
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
             rospy.logwarn("목표 지점 변환 중 오류: %s", str(e))
+
+    def reset_and_try_further_goal(self):
+        """
+        여러 번의 이동 시도가 실패한 후 다른 접근 방식 시도
+        """
+        # 원본 목표와 로봇 사이의 방향 계산
+        robot_pose = self.get_robot_pose()
+        if robot_pose is None or self.original_goal is None:
+            return
     
+        try:
+            # 원본 목표를 costmap 프레임으로 변환
+            if self.original_goal.header.frame_id != self.costmap.header.frame_id:
+                goal_in_costmap_frame = self.tf_buffer.transform(self.original_goal, self.costmap.header.frame_id, rospy.Duration(1.0))
+            else:
+                goal_in_costmap_frame = self.original_goal
+        
+            goal_x = goal_in_costmap_frame.pose.position.x
+            goal_y = goal_in_costmap_frame.pose.position.y
+        
+            # 로봇에서 목표까지의 방향 벡터
+            dx = goal_x - robot_pose.x
+            dy = goal_y - robot_pose.y
+        
+            # 벡터 정규화
+            distance = np.sqrt(dx*dx + dy*dy)
+            if distance > 0:
+                dx /= distance
+                dy /= distance
+        
+            # costmap 크기 가져오기
+            map_width = self.costmap.info.width * self.costmap.info.resolution
+            map_height = self.costmap.info.height * self.costmap.info.resolution
+        
+            # 더 가까운 중간 목표 생성 (로봇 위치에서 반대방향으로)
+            new_x = robot_pose.x - dx * map_width * 0.4  # costmap 폭의 40% 거리로 뒤로 이동
+            new_y = robot_pose.y - dy * map_height * 0.4  # costmap 높이의 40% 거리로 뒤로 이동
+        
+            # 중간 목표 생성
+            intermediate_goal = PoseStamped()
+            intermediate_goal.header.frame_id = self.costmap.header.frame_id
+            intermediate_goal.header.stamp = rospy.Time.now()
+            intermediate_goal.pose.position.x = new_x
+            intermediate_goal.pose.position.y = new_y
+            intermediate_goal.pose.position.z = self.INTERMEDIATE_GOAL_Z
+        
+            # 방향은 원래 목표를 향하도록
+            direction = np.arctan2(goal_y - new_y, goal_x - new_x)
+            intermediate_goal.pose.orientation.z = np.sin(direction / 2)
+            intermediate_goal.pose.orientation.w = np.cos(direction / 2)
+        
+            # 시도 횟수 및 관련 변수 초기화
+            self.current_shift_attempts = 0
+            self.shift_multiplier = 1.0
+        
+            # 새 중간 목표 발행
+            self.intermediate_goal_pub.publish(intermediate_goal)
+            self.last_intermediate_goal_time = rospy.Time.now()
+        
+            rospy.loginfo("새로운 접근 방법: 로봇 근처에 더 가까운 중간 목표 설정 (%.2f, %.2f)", new_x, new_y)
+        
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
+            rospy.logwarn("목표 지점 변환 중 오류: %s", str(e))
+
+
     def shift_intermediate_goal(self):
         """
-    장애물로 인해 경로 생성이 실패할 때 중간 목표 지점을 측면으로 이동시킨다.
-        중간 목표를 기준으로 이동하는 방식으로 변경됨.
+        장애물로 인해 경로 생성이 실패할 때 중간 목표 지점을 측면으로 이동시킨다.
         """
         if not self.have_costmap or self.current_goal is None:
+            return
+        
+        # 최대 시도 횟수 확인
+        if self.current_shift_attempts >= self.max_shift_attempts:
+            rospy.logwarn("최대 %d번 중간 목표 이동 시도했으나 실패. 더 멀리 떨어진 중간 목표를 시도합니다.", self.max_shift_attempts)
+            self.reset_and_try_further_goal()
             return
     
         # 현재 로봇 위치 가져오기
@@ -224,8 +340,11 @@ class PlannerSwitcher:
             perpendicular_x = -intermediate_direction_y  # 오른쪽 방향
             perpendicular_y = intermediate_direction_x   # 위쪽 방향
         
-            # 일정 거리만큼 이동 (항상 1m)
-            shift_distance = 1.0
+            # 이동 거리 계산 - 점진적으로 증가
+            if self.increasing_shift_distance and self.current_shift_attempts % 2 == 0:
+                self.shift_multiplier *= 1.5  # 방향 전환 시마다 1.5배 증가
+        
+            shift_distance = self.base_shift_distance * self.shift_multiplier
         
             # 새 중간 목표 위치 계산
             new_intermediate_x = current_intermediate_x + perpendicular_x * shift_distance * self.failure_shift_direction
@@ -237,8 +356,10 @@ class PlannerSwitcher:
             intermediate_goal.header.stamp = rospy.Time.now()
             intermediate_goal.pose.position.x = new_intermediate_x
             intermediate_goal.pose.position.y = new_intermediate_y
-            intermediate_goal.pose.position.z = self.current_goal.pose.position.z
-        
+            
+            # 중간 목표 식별을 위한 특수 z 값 설정
+            intermediate_goal.pose.position.z = self.INTERMEDIATE_GOAL_Z
+            
             # 방향은 기존 중간 목표와 동일하게 유지
             intermediate_goal.pose.orientation = self.current_goal.pose.orientation
         
@@ -250,16 +371,21 @@ class PlannerSwitcher:
             # 중간 목표 발행
             self.intermediate_goal_pub.publish(intermediate_goal)
             self.last_intermediate_goal_time = rospy.Time.now()
+
+            # 시도 횟수 증가
+            self.current_shift_attempts += 1
         
             # 다음 번 실패 시 반대 방향으로 시도하기 위해 방향 전환
             self.failure_shift_direction *= -1
         
-            rospy.loginfo("장애물 회피를 위해 중간 목표 이동: (%.2f, %.2f) -> (%.2f, %.2f)", 
-                         current_intermediate_x, current_intermediate_y,
-                         new_intermediate_x, new_intermediate_y)
-        
+            rospy.loginfo("장애물 회피를 위해 중간 목표 이동 (%d/%d): (%.2f, %.2f) -> (%.2f, %.2f), 이동거리: %.2fm", 
+                     self.current_shift_attempts, self.max_shift_attempts,
+                     current_intermediate_x, current_intermediate_y,
+                     new_intermediate_x, new_intermediate_y,
+                     shift_distance)
+    
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-            rospy.logwarn("목표 지점 변환 중 오류: %s", str(e))
+                rospy.logwarn("목표 지점 변환 중 오류: %s", str(e))
 
 
     def switch_to_original_goal(self):
@@ -274,7 +400,7 @@ class PlannerSwitcher:
                      self.original_goal.pose.position.x, 
                      self.original_goal.pose.position.y)
                      
-        # CarrotPlanner로 전환
+        # GlobalPlanner로 전환 
         self.switch_planner(self.alternate_planner)
         self.using_default_planner = False
         self.intermediate_goal_active = False
@@ -284,6 +410,10 @@ class PlannerSwitcher:
         original_goal_updated.header = self.original_goal.header
         original_goal_updated.header.stamp = rospy.Time.now()  # 현재 시간으로 업데이트
         original_goal_updated.pose = self.original_goal.pose
+        
+        # z 좌표가 변경되었을 수 있으므로 원래 목표의 z 값 복원
+        if self.ORIGINAL_GOAL_Z is not None:
+            original_goal_updated.pose.position.z = self.ORIGINAL_GOAL_Z
         
         # 약간의 지연 후 원래 목표 발행 (move_base가 이전 목표를 처리할 시간을 주기 위함)
         rospy.sleep(0.5)
@@ -301,18 +431,25 @@ class PlannerSwitcher:
         """
         새 목표 지점이 설정되었을 때의 콜백
         """
-        # 중간 목표를 처리 중인 경우는 무시 (우리가 게시한 중간 목표에 대한 피드백 방지)
-        if hasattr(self, 'last_intermediate_goal_time') and \
-           (rospy.Time.now() - self.last_intermediate_goal_time).to_sec() < 0.5:
+        # 만약 이 목표가 중간 목표라면 무시 (z 좌표로 식별)
+        if self.is_intermediate_goal(goal_msg):
+            rospy.logdebug("중간 목표를 받았습니다. 원본 목표 설정을 건너뜁니다.")
             return
             
         # 원본 목표 저장
         self.original_goal = goal_msg
+        # 원본 목표의 z 좌표 저장
+        self.ORIGINAL_GOAL_Z = goal_msg.pose.position.z
         self.intermediate_goal_active = False
         self.consecutive_failures = 0  # 새 목표 설정시 실패 카운터 초기화
         
+        rospy.loginfo("새 원본 목표 설정: (%.2f, %.2f)", 
+                    goal_msg.pose.position.x, goal_msg.pose.position.y)
+        
         # 중간 목표 업데이트 트리거
         self.update_intermediate_goal()
+        self.current_shift_attempts = 0
+        self.shift_multiplier = 1.0
     
     def current_goal_callback(self, goal_msg):
         """
