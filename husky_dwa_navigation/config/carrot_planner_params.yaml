@@ -1,0 +1,11 @@
+# CarrotPlanner 설정
+# 이 플래너는 로봇이 글로벌 costmap 경계 밖에 있을 때 사용됩니다
+
+CarrotPlanner:
+  step_size: 0.2                # 경로상의 충돌 확인을 위한 스텝 크기
+  min_dist_from_robot: 0.5      # 당근 마커 배치를 위한 로봇으로부터의 최소 거리
+  carrot_distance: 1.0          # 로봇 앞에 당근 마커를 배치할 거리
+  carrot_angular_distance: 0.5  # 당근 배치를 위한 각도 거리
+  allow_unknown: true           # 미지 공간을 통한 계획 허용
+  visualize_potential: false    # 포텐셜 맵 시각화 표시
+  publish_potential: true       # 시각화를 위한 포텐셜 그리드 발행
