@@ -10,6 +10,10 @@ oscillation_reset_dist: 0.5  # 진동 리셋 거리 (m)
 recovery_behavior_enabled: true
 clearing_rotation_allowed: true
 
+# 맵 외부에서 CarrotPlanner 사용 설정
+use_carrot_planner_outside_map: true  # costmap 외부에서 CarrotPlanner 활성화
+
+
 # 복구 동작 설정
 recovery_behaviors:
   - name: conservative_reset
@@ -23,3 +27,10 @@ recovery_behaviors:
 clear_costmap_recovery:
   reset_distance: 1.0
   layer_names: ["voxel_layer"]
+
+
+# CarrotPlanner 파라미터
+CarrotPlanner:
+  step_size: 0.2
+  min_dist_from_robot: 0.1
+  carrot_distance: 0.5  # 로봇 앞에 당근 마커를 배치할 거리

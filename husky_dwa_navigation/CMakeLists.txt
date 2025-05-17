@@ -5,6 +5,8 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   tf
+  tf2_ros
+  tf2_geometry_msgs
   std_msgs
   geometry_msgs
   sensor_msgs
@@ -15,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   nodelet
   pointcloud_to_laserscan
   costmap_2d
+  dynamic_reconfigure
 )
 
 catkin_package()
@@ -23,7 +26,14 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-# Install launch and config files
+# Python 스크립트 설치 설정 추가
+catkin_install_python(
+  PROGRAMS 
+    scripts/planner_switcher_node.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+# 기존 설치 설정
 install(
   DIRECTORY launch config
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
