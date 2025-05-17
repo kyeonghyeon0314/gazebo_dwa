@@ -10,8 +10,6 @@ oscillation_reset_dist: 0.5  # 진동 리셋 거리 (m)
 recovery_behavior_enabled: true
 clearing_rotation_allowed: true
 
-# 맵 외부에서 CarrotPlanner 사용 설정
-use_carrot_planner_outside_map: true  # costmap 외부에서 CarrotPlanner 활성화
 
 
 # 복구 동작 설정
