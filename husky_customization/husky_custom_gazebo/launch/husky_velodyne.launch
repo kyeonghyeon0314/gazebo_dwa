@@ -6,7 +6,7 @@
   <env name="GAZEBO_GPU_RAY" value="1"/>
   <env name="SVGA_VGPU10" value="0"/>
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
-    <arg name="world_name" value="$(find husky_gazebo)/worlds/clearpath_playpen.world"/>
+    <arg name="world_name" value="$(find husky_custom_gazebo)/worlds/custom_world.world"/>
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
     <arg name="gui" value="true"/>

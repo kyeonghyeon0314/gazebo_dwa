@@ -8,6 +8,6 @@ catkin_add_env_hooks(60.husky_custom_gazebo
   SHELLS sh DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/env-hooks)
 
 install(
-  DIRECTORY urdf launch
+  DIRECTORY urdf launch worlds
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
