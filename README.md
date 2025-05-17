@@ -10,7 +10,7 @@ gazebo환경에 husky와 velodyne 라이다 추가하고 dwa를 통한 장애물
 
 <div align="center">
   <div style="margin-bottom: 10px;">
-    <img src="docs/images/rqt.png" width="100%">
+    <img src="docs/images/dwa_rqt.png" width="100%">
     <p style="text-align: center;">rqt_graph</p>
   </div>
 </div>
