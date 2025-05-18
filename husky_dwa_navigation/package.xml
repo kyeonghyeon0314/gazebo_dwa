@@ -28,11 +28,6 @@
   <depend>global_planner</depend>
   <depend>move_base_planner_switcher</depend>
   <depend>dynamic_reconfigure</depend>
-  <!-- GPU 기반 포인트 클라우드 처리 의존성 -->
-  <depend>points_preprocess_ros</depend>
-  <!-- 또는 다른 GPU 필터링 패키지들 -->
-  <depend>pcl_gpu</depend> 
-  <depend>fast_gicp</depend> 
 
   <export>
   </export>
