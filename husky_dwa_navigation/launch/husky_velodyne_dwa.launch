@@ -6,16 +6,16 @@
   <!-- 포인트 클라우드 처리 파이프라인 -->
   <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="screen" />
   
-  <!-- 벨로다인 데이터 다운샘플링을 위한 VoxelGrid 필터 -->
-  <node pkg="nodelet" type="nodelet" name="voxel_grid" args="load pcl/VoxelGrid pcl_manager" output="screen">
-    <remap from="~input" to="/velodyne_points" />
-    <remap from="~output" to="/velodyne_points_filtered" />
-    <param name="leaf_size" value="0.02" />
-    <param name="filter_field_name" value="z" />
-    <param name="filter_limit_min" value="-0.8" />
-    <param name="filter_limit_max" value="2.0" />
-    <param name="use_gpu" value="true"/>  <!-- GPU 사용 활성화 -->
+  <!-- 방법 1: 최적화된 NumPy 기반 필터 (추천) -->
+  <node pkg="husky_dwa_navigation" type="z_filter_gpu.py" name="z_filter_gpu" output="screen">
+    <param name="z_min" value="-0.65" />
+    <param name="z_max" value="2.0" />
+    <param name="use_threading" value="true" />
+    <param name="buffer_size" value="2" />
+    <param name="input_topic" value="/velodyne_points" />
+    <param name="output_topic" value="/velodyne_points_filtered" />
   </node>
+
 
   <!-- Move Base 네비게이션 스택 사용 -->
   <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
