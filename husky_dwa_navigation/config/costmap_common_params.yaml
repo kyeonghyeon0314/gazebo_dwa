@@ -28,7 +28,7 @@ voxel_layer:
     clearing: true                # 장애물 제거
     min_obstacle_height: -0.05     # 감지할 최소 장애물 높이(m)
     max_obstacle_height: 1.8      # 감지할 최대 장애물 높이 (m)
-    observation_persistence: 0  # 관측 유지 시간 (0: 즉시 업데이트)
+    observation_persistence: 3  # 관측 유지 시간 (0: 즉시 업데이트)
     expected_update_rate: 10.0    # 예상 업데이트 빈도 (Hz)
     voxel_min_points: 3        # 최소 포인트 수(이것보다 적으면 무시)
     
