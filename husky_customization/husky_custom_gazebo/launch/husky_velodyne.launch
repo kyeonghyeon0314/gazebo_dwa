@@ -5,6 +5,7 @@
   <env name="CUDA_VISIBLE_DEVICES" value="0"/>
   <env name="GAZEBO_GPU_RAY" value="1"/>
   <env name="SVGA_VGPU10" value="0"/>
+
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
     <arg name="world_name" value="$(find husky_custom_gazebo)/worlds/custom_world.world"/>
     <arg name="paused" value="false"/>
@@ -21,10 +22,10 @@
   <!-- Husky control -->
   <include file="$(find husky_control)/launch/control.launch" />
 
+
   <!-- 직접 husky_description과 velodyne 설정 로드 -->
   <param name="robot_description" command="$(find xacro)/xacro '$(find husky_custom_description)/urdf/custom_description.urdf.xacro'" />
-
-
+  
   <!-- 로봇 스폰
   <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model"
         output = "screen"
