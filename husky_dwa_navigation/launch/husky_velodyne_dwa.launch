@@ -58,7 +58,7 @@
         args="0.2 0 0.4 0 0 0 top_plate_link velodyne 100" />
 
   <!-- 글로벌 플래너 전환 모니터링 - 직접 husky_dwa_navigation 패키지의 스크립트 실행 -->
-  <node pkg="husky_dwa_navigation" type="planner_switcher_node.py" name="planner_switcher" output="screen">
+  <node pkg="husky_dwa_navigation" type="navigation_manager_node.py" name="navigation_manager " output="screen">
     <param name="global_costmap_topic" value="/move_base/global_costmap/costmap" />
     <param name="robot_base_frame" value="base_link" />
     <param name="switch_service" value="/move_base/set_parameters" />

@@ -12,7 +12,7 @@ from dynamic_reconfigure.msg import Config, StrParameter
 from dynamic_reconfigure.srv import Reconfigure
 import rosgraph_msgs.msg
 
-class PlannerSwitcher:
+class NavigationManager:
     def __init__(self):
         # TF 버퍼 초기화
         self.tf_buffer = tf2_ros.Buffer()
@@ -556,9 +556,9 @@ class PlannerSwitcher:
             rospy.logerr("서비스 호출 실패: %s", str(e))
 
 def main():
-    rospy.init_node('planner_switcher_node')
+    rospy.init_node('navigation_manager_node')
     
-    switcher = PlannerSwitcher()
+    manager = NavigationManager()
     
     rospy.loginfo("플래너 전환 노드가 실행 중입니다...")
     rospy.spin()
