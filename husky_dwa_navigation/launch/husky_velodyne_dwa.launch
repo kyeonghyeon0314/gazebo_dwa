@@ -10,9 +10,9 @@
   <node pkg="nodelet" type="nodelet" name="voxel_grid" args="load pcl/VoxelGrid pcl_manager" output="screen">
     <remap from="~input" to="/velodyne_points" />
     <remap from="~output" to="/velodyne_points_filtered" />
-    <param name="leaf_size" value="0.10" />
+    <param name="leaf_size" value="0.02" />
     <param name="filter_field_name" value="z" />
-    <param name="filter_limit_min" value="-0.7" />
+    <param name="filter_limit_min" value="-0.8" />
     <param name="filter_limit_max" value="2.0" />
     <param name="use_gpu" value="true"/>  <!-- GPU 사용 활성화 -->
   </node>
@@ -58,7 +58,7 @@
         args="0.2 0 0.4 0 0 0 top_plate_link velodyne 100" />
 
   <!-- 글로벌 플래너 전환 모니터링 - 직접 husky_dwa_navigation 패키지의 스크립트 실행 -->
-  <node pkg="husky_dwa_navigation" type="navigation_manager_node.py" name="navigation_manager " output="screen">
+  <node pkg="husky_dwa_navigation" type="navigation_manager_node.py" name="navigation_manager" output="screen">
     <param name="global_costmap_topic" value="/move_base/global_costmap/costmap" />
     <param name="robot_base_frame" value="base_link" />
     <param name="switch_service" value="/move_base/set_parameters" />
