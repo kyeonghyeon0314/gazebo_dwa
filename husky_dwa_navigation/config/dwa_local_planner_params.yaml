@@ -14,8 +14,8 @@ DWAPlannerROS:
 
 
   # 목표 도달 허용치
-  xy_goal_tolerance: 1   # 위치 허용 오차 (m)
-  yaw_goal_tolerance: 1.57  # 방향 허용 오차 (rad)
+  xy_goal_tolerance: 1.0   # 위치 허용 오차 (m)
+  yaw_goal_tolerance: 3.141592  # 방향 허용 오차 (rad)
   latch_xy_goal_tolerance: True  # 위치 도달 후 회전만 허용
   penalize_negative_x: false  # 후진보다 제자리 회전 선호
   
