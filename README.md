@@ -47,15 +47,32 @@ catkin_make
 cd src
 git clone https://github.com/kyeonghyeon0314/gazebo_velodyne_dwa.git
 
+# 필수 의존성 설치
 sudo apt-get install ros-noetic-gazebo-ros \
                      ros-noetic-roscpp \
+                     ros-noetic-rospy \
                      ros-noetic-sensor-msgs \
+                     ros-noetic-std-msgs \
+                     ros-noetic-geometry-msgs \
+                     ros-noetic-nav-msgs \
                      ros-noetic-tf \
+                     ros-noetic-tf2-ros \
+                     ros-noetic-tf2-geometry-msgs \
+                     ros-noetic-velodyne-description \
                      ros-noetic-velodyne-gazebo-plugins \
                      ros-noetic-husky-description \
                      ros-noetic-husky-gazebo \
+                     ros-noetic-husky-control \
                      ros-noetic-dwa-local-planner \
-                     ros-noetic-move-base
+                     ros-noetic-global-planner \
+                     ros-noetic-move-base \
+                     ros-noetic-pcl-ros \
+                     ros-noetic-nodelet \
+                     ros-noetic-pointcloud-to-laserscan \
+                     ros-noetic-costmap-2d \
+                     ros-noetic-dynamic-reconfigure \
+                     ros-noetic-urdf \
+                     ros-noetic-xacro
 
 cd ..
 catkin_make
