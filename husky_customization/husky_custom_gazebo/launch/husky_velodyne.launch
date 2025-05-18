@@ -5,8 +5,6 @@
   <env name="CUDA_VISIBLE_DEVICES" value="0"/>
   <env name="GAZEBO_GPU_RAY" value="1"/>
   <env name="SVGA_VGPU10" value="0"/>
-
-
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
     <arg name="world_name" value="$(find husky_custom_gazebo)/worlds/custom_world.world"/>
     <arg name="paused" value="false"/>
@@ -14,7 +12,6 @@
     <arg name="gui" value="true"/>
     <arg name="headless" value="false"/>
     <arg name="debug" value="false"/>
-    <arg name="extra_gazebo_args" value="--verbose"/>
   </include>
 
   <!-- 환경 변수 설정 -->
@@ -28,10 +25,11 @@
   <param name="robot_description" command="$(find xacro)/xacro '$(find husky_custom_description)/urdf/custom_description.urdf.xacro'" />
 
 
-  <!-- 로봇 스폰-->
+  <!-- 로봇 스폰
   <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model"
         output = "screen"
-        args="-urdf -model husky -param robot_description -z 0.1" />
+        args="-urdf -model husky -param robot_description -z 0.1" /> -->
+
 
 
 

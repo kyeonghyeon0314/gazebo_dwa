@@ -30,12 +30,11 @@ include_directories(
 catkin_install_python(
   PROGRAMS 
     scripts/navigation_manager_node.py
-    scripts/z_filter_gpu.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
 # 기존 설치 설정
 install(
-  DIRECTORY launch config scripts
+  DIRECTORY launch config
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
