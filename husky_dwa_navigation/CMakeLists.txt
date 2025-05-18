@@ -29,7 +29,7 @@ include_directories(
 # Python 스크립트 설치 설정 추가
 catkin_install_python(
   PROGRAMS 
-    scripts/planner_switcher_node.py
+    scripts/navigation_manager_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
