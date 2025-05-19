@@ -37,6 +37,6 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
   <!-- LiDAR 추가(HDL-32E) -->
   <xacro:include filename="$(find velodyne_description)/urdf/HDL-32E.urdf.xacro"/>
   <xacro:HDL-32E parent="top_plate_link" name="velodyne" topic="/velodyne_points" hz="10" samples="2187" gpu="true">
-    <origin xyz="0.2 0 0.4" rpy="0 0 0" />
+    <origin xyz="0.2 0 1.0" rpy="0 0 0" />
   </xacro:HDL-32E>
 </robot>
