@@ -16,7 +16,7 @@
   </include> -->
 
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
-    <arg name="world_name" default="$(find husky_custom_gazebo)/worlds/autoware.world"/> 
+    <arg name="world_name" default="$(find husky_custom_gazebo)/worlds/citysim_gazebo9.world"/> 
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
     <arg name="gui" value="true"/>
