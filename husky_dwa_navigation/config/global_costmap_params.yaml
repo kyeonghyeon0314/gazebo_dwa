@@ -1,8 +1,8 @@
 global_costmap:
   global_frame: odom
   robot_base_frame: base_link
-  update_frequency: 1
-  publish_frequency: 1
+  update_frequency: 2
+  publish_frequency: 2
   static_map: false
   rolling_window: true
   width: 18.0
@@ -12,6 +12,10 @@ global_costmap:
   reset_distance: 0.5
   track_unknown_space: true
 
+
   plugins:
-    - {name: voxel_layer, type: "costmap_2d::VoxelLayer"}
+    - {name: obstacles_laser, type: "costmap_2d::ObstacleLayer"}
     - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
+  # plugins:
+  #   - {name: voxel_layer, type: "costmap_2d::VoxelLayer"}
+  #   - {name: inflation_layer, type: "costmap_2d::InflationLayer"}

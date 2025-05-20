@@ -16,6 +16,16 @@
     <param name="filter_limit_max" value="2.0" />
     <param name="use_gpu" value="true"/>  <!-- GPU 사용 활성화 -->
   </node>
+  <!-- 추가: PointCloud2를 LaserScan으로 변환 -->
+  <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan">
+    <remap from="cloud_in" to="/velodyne_points_filtered"/>
+    <remap from="scan" to="/velodyne_scan"/>
+    <param name="angle_min" value="-3.14159"/>
+    <param name="angle_max" value="3.14159"/>
+    <param name="min_height" value="-0.7"/>
+    <param name="max_height" value="2"/>
+    <param name="angle_increment" value="0.01"/>
+  </node>
 
   <!-- Move Base 네비게이션 스택 사용 -->
   <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
@@ -55,7 +65,7 @@
 
   <!-- StaticTransformPublisher: Velodyne 장치의 정확한 위치 게시 -->
   <node pkg="tf" type="static_transform_publisher" name="velodyne_tf_publisher" 
-        args="0.2 0 1.0 0 0 0 top_plate_link velodyne 100" />
+        args="0.2 0 0.4 0 0 0 top_plate_link velodyne 100" />
 
   <!-- 글로벌 플래너 전환 모니터링 - 직접 husky_dwa_navigation 패키지의 스크립트 실행 -->
   <node pkg="husky_dwa_navigation" type="navigation_manager_node.py" name="navigation_manager" output="screen">
