@@ -38,7 +38,7 @@
   <!-- 로봇 스폰-->
   <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model"
         output = "screen"
-        args="-urdf -model husky -param robot_description -z 0" /> 
+        args="-urdf -model husky -param robot_description -z 1" /> 
 
 
 
