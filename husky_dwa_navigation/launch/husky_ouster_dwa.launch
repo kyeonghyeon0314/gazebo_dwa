@@ -14,7 +14,6 @@
     <param name="filter_field_name" value="z" />
     <param name="filter_limit_min" value="-0.7" />
     <param name="filter_limit_max" value="2.0" />
-    <param name="use_gpu" value="true"/>  <!-- GPU 사용 활성화 -->
   </node>
   <!-- 추가: PointCloud2를 LaserScan으로 변환 -->
   <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan">
@@ -74,5 +73,5 @@
     <param name="check_frequency" value="5.0" />
     <param name="border_tolerance" value="1.0" />
   </node>
-
+  
 </launch>
