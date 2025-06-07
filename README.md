@@ -57,7 +57,7 @@ cd husky_ws
 catkin_make
 
 cd src
-git clone https://github.com/kyeonghyeon0314/gazebo_velodyne_dwa.git
+git clone https://github.com/kyeonghyeon0314/gazebo_dwa.git
 
 # 필수 의존성 설치
 sudo apt-get install ros-noetic-gazebo-ros \
