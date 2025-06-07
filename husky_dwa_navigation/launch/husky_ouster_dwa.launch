@@ -9,7 +9,7 @@
   <!-- 벨로다인 데이터 다운샘플링을 위한 VoxelGrid 필터 -->
   <node pkg="nodelet" type="nodelet" name="voxel_grid" args="load pcl/VoxelGrid pcl_manager" output="screen">
     <remap from="~input" to="/os1/points" />
-    <remap from="~output" to="/velodyne_points_filtered" />
+    <remap from="~output" to="/points_filtered" />
     <param name="leaf_size" value="0.10" />
     <param name="filter_field_name" value="z" />
     <param name="filter_limit_min" value="-0.5" />
@@ -17,8 +17,8 @@
   </node>
   <!-- 추가: PointCloud2를 LaserScan으로 변환 -->
   <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan">
-    <remap from="cloud_in" to="/velodyne_points_filtered"/>
-    <remap from="scan" to="/velodyne_scan"/>
+    <remap from="cloud_in" to="/points_filtered"/>
+    <remap from="scan" to="/scan"/>
     <param name="angle_min" value="-3.14159"/>
     <param name="angle_max" value="3.14159"/>
     <param name="min_height" value="-0.7"/>

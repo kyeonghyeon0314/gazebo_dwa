@@ -9,7 +9,7 @@
   
   <!-- 가제보 환경과 휴스키 로봇 실행 (GPS 센서 포함) -->
   <!-- 실제 패키지명: husky_custom_gazebo -->
-  <include file="$(find husky_custom_gazebo)/launch/husky_ouster.launch"/>
+  <include file="$(find husky_custom_gazebo)/launch/husky_ouster_gps.launch"/>
 
   <!-- GPS Heading 초기화 노드 -->
   <node pkg="husky_dwa_navigation" type="gps_heading_initializer.py" name="gps_heading_initializer" output="screen">
@@ -65,9 +65,9 @@
   <!-- Move Base 네비게이션 스택 (UTM 기반) -->
   <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
     <!-- UTM 기반 config 파일들 사용 -->
-    <rosparam file="$(find husky_dwa_navigation)/config/costmap_common_params_utm.yaml" command="load" ns="global_costmap"/>
-    <rosparam file="$(find husky_dwa_navigation)/config/costmap_common_params_utm.yaml" command="load" ns="local_costmap"/>
-    <rosparam file="$(find husky_dwa_navigation)/config/local_costmap_params_utm.yaml" command="load"/>
+    <rosparam file="$(find husky_dwa_navigation)/config/costmap_common_params.yaml" command="load" ns="global_costmap"/>
+    <rosparam file="$(find husky_dwa_navigation)/config/costmap_common_params.yaml" command="load" ns="local_costmap"/>
+    <rosparam file="$(find husky_dwa_navigation)/config/local_costmap_params.yaml" command="load"/>
     <rosparam file="$(find husky_dwa_navigation)/config/global_costmap_params_utm.yaml" command="load"/>
     <rosparam file="$(find husky_dwa_navigation)/config/move_base_params.yaml" command="load"/>
     <rosparam file="$(find husky_dwa_navigation)/config/dwa_local_planner_params.yaml" command="load"/>
@@ -118,10 +118,5 @@
   <!-- Static transform: base_link to gps_link -->
   <node pkg="tf2_ros" type="static_transform_publisher" name="base_to_gps_tf" 
         args="-0.3 0 0.3 0 0 0 base_link gps_link"/>
-
-  <!-- RViz 시각화 (선택사항) -->
-  <node pkg="rviz" type="rviz" name="rviz" 
-        args="-d $(find husky_custom_gazebo)/rviz/husky_ouster.rviz"
-        if="$(eval arg('world_name') != 'empty')"/>
 
 </launch>
