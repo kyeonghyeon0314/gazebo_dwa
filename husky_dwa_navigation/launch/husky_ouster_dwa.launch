@@ -12,7 +12,7 @@
     <remap from="~output" to="/velodyne_points_filtered" />
     <param name="leaf_size" value="0.10" />
     <param name="filter_field_name" value="z" />
-    <param name="filter_limit_min" value="-0.7" />
+    <param name="filter_limit_min" value="-0.5" />
     <param name="filter_limit_max" value="2.0" />
   </node>
   <!-- 추가: PointCloud2를 LaserScan으로 변환 -->
