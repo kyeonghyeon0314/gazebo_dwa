@@ -89,6 +89,9 @@ sudo apt-get install ros-noetic-gazebo-ros \
 cd ..
 catkin_make
 
+# velodyne 인도 x
 roslaunch husky_dwa_navigation husky_velodyne_dwa.launch
 
+# ouster 인도O
+roslaunch husky_dwa_navigation husky_ouster_dwa.launch
 ```
