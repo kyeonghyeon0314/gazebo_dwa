@@ -259,7 +259,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.029999999329447746
       Style: Flat Squares
-      Topic: /velodyne_points_filtered
+      Topic: /points_filtered
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -287,7 +287,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.05000000074505806
       Style: Points
-      Topic: /velodyne_scan
+      Topic: /scan
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -340,7 +340,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 2.721226692199707
+      Distance: 58.029842376708984
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -356,9 +356,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.6602040529251099
+      Pitch: 0.8852040767669678
       Target Frame: <Fixed Frame>
-      Yaw: 5.4285664558410645
+      Yaw: 2.9085657596588135
     Saved: ~
 Window Geometry:
   Displays:

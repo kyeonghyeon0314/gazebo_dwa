@@ -33,7 +33,7 @@
 
 
   <!-- 직접 husky_description과 velodyne 설정 로드 -->
-  <param name="robot_description" command="$(find xacro)/xacro '$(find husky_custom_description)/urdf/custom_description_ouster.urdf.xacro'" />
+  <param name="robot_description" command="$(find xacro)/xacro '$(find husky_custom_description)/urdf/custom_description_ouster_gps.urdf.xacro'" />
   
   <!-- 로봇 스폰-->
   <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model"
