@@ -27,9 +27,6 @@
     <arg name="headless" value="false"/>
     <arg name="debug" value="false"/>
   </include>
-  
-  <!-- Husky control -->
-  <include file="$(find husky_control)/launch/control.launch" />
 
 
   <!-- 직접 husky_description과 velodyne 설정 로드 -->

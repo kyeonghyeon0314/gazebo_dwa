@@ -31,6 +31,9 @@ class UTMLocalizationNode:
         self.map_frame = rospy.get_param('~map_frame', 'map')
         self.gps_frame = rospy.get_param('~gps_frame', 'gps_link')
         
+        # IMU 토픽 파라미터 추가 - 기본값을 /os1/imu로 설정
+        self.imu_topic = rospy.get_param('~imu_topic', '/os1/imu')
+        
         # 필터링 파라미터
         self.gps_weight = rospy.get_param('~gps_weight', 0.7)
         self.odom_weight = rospy.get_param('~odom_weight', 0.2)
@@ -75,15 +78,18 @@ class UTMLocalizationNode:
         # Subscribers
         self.gps_sub = rospy.Subscriber('/gps/fix', NavSatFix, self.gps_callback)
         self.odom_sub = rospy.Subscriber('/husky_velocity_controller/odom', Odometry, self.odom_callback)
-        self.imu_sub = rospy.Subscriber('/imu/data', Imu, self.imu_callback)
+        
+        # 동적으로 설정된 IMU 토픽 구독
+        self.imu_sub = rospy.Subscriber(self.imu_topic, Imu, self.imu_callback)
         
         # 융합 타이머
         self.fusion_timer = rospy.Timer(rospy.Duration(0.1), self.fusion_callback)  # 10Hz
         
         rospy.loginfo("=== UTM Localization Node 시작 ===")
         rospy.loginfo(f"Fixed Frame: {self.fixed_frame}")
+        rospy.loginfo(f"IMU Topic: {self.imu_topic}")
         rospy.loginfo(f"센서 가중치 - GPS: {self.gps_weight}, Odom: {self.odom_weight}, IMU: {self.imu_weight}")
-        
+    
     def gps_callback(self, gps_msg):
         """GPS 데이터 콜백"""
         if gps_msg.status.status < 0:
@@ -369,7 +375,7 @@ class UTMLocalizationNode:
         else: status_parts.append("IMU: NO")
         
         status_msg = String()
-        status_msg.data = f"Localization - {', '.join(status_parts)}"
+        status_msg.data = f"Localization ({self.imu_topic}) - {', '.join(status_parts)}"
         self.localization_status_pub.publish(status_msg)
 
 if __name__ == '__main__':
