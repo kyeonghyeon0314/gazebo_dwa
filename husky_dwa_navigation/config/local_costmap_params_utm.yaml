@@ -1,0 +1,18 @@
+# 월드 파일 기준 UTM 로컬 Costmap 파라미터
+local_costmap:
+  global_frame: utm              # 월드 파일 기준 UTM 좌표계
+  robot_base_frame: base_link
+  update_frequency: 10
+  publish_frequency: 10
+  static_map: false
+  rolling_window: true
+  width: 15.0  
+  height: 15.0
+  resolution: 0.05
+  transform_tolerance: 0.5       # UTM 변환을 위한 여유값
+  reset_distance: 0.25
+  track_unknown_space: true
+
+  plugins:
+    - {name: obstacles_laser, type: "costmap_2d::ObstacleLayer"}
+    - {name: inflation_layer, type: "costmap_2d::InflationLayer"}

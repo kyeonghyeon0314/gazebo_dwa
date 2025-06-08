@@ -35,29 +35,23 @@
       <origin xyz="-0.3 0 0.3" rpy="0 0 0"/>
     </joint>
 
-    <!-- Gazebo GPS 플러그인 -->
+    <!-- 월드 파일 기준 GPS 플러그인 (위도 0°, 경도 0°) -->
     <gazebo reference="gps_link">
-      <sensor type="gps" name="husky_gps">
-        <pose>0 0 0 0 0 0</pose>
-        <visualize>true</visualize>
-        <update_rate>10.0</update_rate>
-        <plugin name="gps_controller" filename="libhector_gazebo_ros_gps.so">
-          <alwaysOn>true</alwaysOn>
-          <updateRate>10.0</updateRate>
-          <bodyName>gps_link</bodyName>
-          <frameId>gps_link</frameId>
-          <topicName>/gps/fix</topicName>
-          <velocityTopicName>/gps/fix_velocity</velocityTopicName>
-          <referenceLatitude>37.4419</referenceLatitude>
-          <referenceLongitude>-122.1430</referenceLongitude>
-          <referenceHeading>0</referenceHeading>
-          <referenceAltitude>10</referenceAltitude>
-          <drift>0.01 0.01 0.01</drift>
-          <gaussianNoise>0.1 0.1 0.1</gaussianNoise>
-          <velocityDrift>0 0 0</velocityDrift>
-          <velocityGaussianNoise>0.1 0.1 0.1</velocityGaussianNoise>
-        </plugin>
-      </sensor>
+      <plugin name="gps_controller" filename="libhector_gazebo_ros_gps.so">
+        <alwaysOn>true</alwaysOn>
+        <updateRate>10.0</updateRate>
+        <bodyName>gps_link</bodyName>
+        <frameId>gps_link</frameId>
+        <topicName>/gps/fix</topicName>
+        <!-- 월드 파일과 동일한 GPS 좌표 (위도 0°, 경도 0°) -->
+        <referenceLatitude>0.0</referenceLatitude>
+        <referenceLongitude>0.0</referenceLongitude>
+        <referenceHeading>0</referenceHeading>
+        <referenceAltitude>0</referenceAltitude>
+        <!-- 시뮬레이션용 최소 노이즈 -->
+        <drift>0.001 0.001 0.001</drift>
+        <gaussianNoise>0.01 0.01 0.01</gaussianNoise>
+      </plugin>
     </gazebo>
   
   </xacro:macro>
