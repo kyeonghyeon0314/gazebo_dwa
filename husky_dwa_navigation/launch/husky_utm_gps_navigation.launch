@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
   <!-- UTM 좌표계 인수 정의 (citysim_gazebo.world 기준) -->
-  <arg name="utm_zone" default="31" doc="UTM zone number (citysim world: 31)"/>
+  <arg name="utm_zone" default="32" doc="UTM zone number (citysim world: 32)"/>
   <arg name="utm_band" default="N" doc="UTM band letter (citysim world: N)"/>
  
   <!-- 기존 husky ouster 실행 -->
@@ -84,11 +84,14 @@
     <param name="utm_band" value="$(arg utm_band)"/>
   </node>
 
-  <!-- 시스템 상태 출력 -->
-  <param name="system_info" value="=== Husky UTM GPS Navigation System ===
-✅ GPS 토픽 자동 연결: /navsat/fix -> /gps/fix
-✅ 2D 모드 EKF 활성화 (Z축 드리프트 방지)
-✅ UTM 좌표계 기반 네비게이션
-🚀 초기 heading 설정: roslaunch husky_dwa_navigation initial_heading_clean.launch"/>
-
+  <!-- 글로벌 플래너 전환 모니터링 - 직접 husky_dwa_navigation 패키지의 스크립트 실행 -->
+  <node pkg="husky_dwa_navigation" type="navigation_manager_node.py" name="navigation_manager" output="screen">
+    <param name="global_costmap_topic" value="/move_base/global_costmap/costmap" />
+    <param name="robot_base_frame" value="base_link" />
+    <param name="switch_service" value="/move_base/set_parameters" />
+    <param name="planner_type_parameter" value="/move_base/base_global_planner" />
+    <param name="default_planner" value="global_planner/GlobalPlanner" />
+    <param name="check_frequency" value="5.0" />
+    <param name="border_tolerance" value="1.0" />
+  </node>
 </launch>

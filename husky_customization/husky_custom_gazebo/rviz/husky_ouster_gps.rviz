@@ -6,6 +6,7 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /Odometry1
       Splitter Ratio: 0.5
     Tree Height: 917
   - Class: rviz/Selection
@@ -25,7 +26,7 @@ Panels:
   - Class: rviz/Time
     Name: Time
     SyncMode: 0
-    SyncSource: ""
+    SyncSource: PointCloud2
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -264,8 +265,8 @@ Visualization Manager:
           Color: 204; 51; 204
           Scale: 1
           Value: true
-        Value: true
-      Enabled: false
+        Value: false
+      Enabled: true
       Keep: 100
       Name: Odometry
       Position Tolerance: 0.10000000149011612
@@ -282,7 +283,7 @@ Visualization Manager:
         Value: Arrow
       Topic: /odometry/filtered
       Unreliable: false
-      Value: false
+      Value: true
     - Alpha: 1
       Buffer Length: 1
       Class: rviz/Path
@@ -417,12 +418,21 @@ Visualization Manager:
     - Alpha: 1
       Class: rviz_plugin_tutorials/Imu
       Color: 204; 51; 204
-      Enabled: true
+      Enabled: false
       History Length: 1
       Name: Imu
       Queue Size: 10
       Topic: /os1/imu
       Unreliable: false
+      Value: false
+    - Class: rviz/InteractiveMarkers
+      Enable Transparency: true
+      Enabled: true
+      Name: InteractiveMarkers
+      Show Axes: false
+      Show Descriptions: true
+      Show Visual Aids: false
+      Update Topic: /twist_marker_server/update
       Value: true
   Enabled: true
   Global Options:
@@ -452,7 +462,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 522.3060302734375
+      Distance: 36.45548629760742
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -460,17 +470,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0
-        Y: 0
-        Z: 0
+        X: -10.092609405517578
+        Y: 5.015684604644775
+        Z: 2.0521492958068848
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -0.01520261075347662
+      Pitch: 1.105202078819275
       Target Frame: <Fixed Frame>
-      Yaw: 5.228594779968262
+      Yaw: 3.258594036102295
     Saved: ~
 Window Geometry:
   Displays:
