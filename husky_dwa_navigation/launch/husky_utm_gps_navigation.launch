@@ -7,8 +7,6 @@
   <!-- 기존 husky ouster 실행 -->
   <include file="$(find husky_custom_gazebo)/launch/husky_ouster_gps.launch"/>
 
-  
-  
   <!-- Robot Localization EKF 노드 - Ouster IMU 사용 -->
   <node pkg="robot_localization" type="ekf_localization_node" name="ekf_se_odom" clear_params="true">
     <rosparam command="load" file="$(find husky_dwa_navigation)/config/localization_ouster.yaml" />
@@ -18,11 +16,10 @@
     <remap from="/imu0" to="/os1/imu" />
   </node>
 
-
-
-  <!-- UTM 프레임을 odom 기준으로 생성 (Static Transform) -->
-  <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_utm_static" 
-        args="0 0 0 0 0 0 odom utm" 
+  <!-- UTM 프레임을 최상위로 설정 (Fixed Frame) -->
+  <!-- utm -> odom 순서로 변경 (utm이 부모, odom이 자식) -->
+  <node pkg="tf2_ros" type="static_transform_publisher" name="utm_to_odom_static" 
+        args="0 0 0 0 0 0 utm odom" 
         output="screen"/>
 
   <!-- 포인트 클라우드 처리 파이프라인 -->
@@ -98,7 +95,7 @@
     <param name="utm_band" value="$(arg utm_band)"/>
   </node>
 
-  <!-- UTM 프레임 확인 -->
+  <!-- UTM 프레임 확인을 위한 TF 모니터링 -->
   <node pkg="rostopic" type="rostopic" name="utm_frame_check" 
         args="echo /tf_static" 
         output="screen"/>

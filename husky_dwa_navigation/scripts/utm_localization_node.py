@@ -1,8 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
-UTM 기반 Localization 노드 (최소 종속성 버전)
+UTM 기반 Localization 노드 (Python 3.8 호환 버전)
 Static transform만 사용한 기본적인 UTM 좌표계 설정
 """
 
@@ -32,7 +32,7 @@ class UTMLocalizationNode:
         # UTM 프레임 설정
         self.setup_utm_transforms()
         
-        rospy.loginfo("=== UTM Localization Node 시작 ===")
+        rospy.loginfo("=== UTM Localization Node 시작 (Python 3.8) ===")
         rospy.loginfo(f"UTM Zone: {self.utm_zone}{self.utm_band}")
         rospy.loginfo(f"Fixed Frame: {self.fixed_frame}")
         

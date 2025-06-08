@@ -1,8 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
-GPS 기반 초기 Heading 설정 노드 (개선된 버전)
+GPS 기반 초기 Heading 설정 노드 (Python 3.8 호환 버전)
 1. Space바를 누르기 전까지는 동작하지 않음
 2. 로봇 전방 3m에 임시 목적지 생성
 3. 이동 경로를 통해 초기 heading 설정
@@ -63,7 +63,7 @@ class GPSHeadingInitializer:
         self.cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=1)
         
         # Subscribers
-        self.gps_sub = rospy.Subscribe('/gps/fix', NavSatFix, self.gps_callback)
+        self.gps_sub = rospy.Subscriber('/gps/fix', NavSatFix, self.gps_callback)
         self.space_sub = rospy.Subscriber('/space_key_pressed', Bool, self.space_callback)
         
         # 키보드 입력 처리를 위한 스레드
@@ -71,7 +71,7 @@ class GPSHeadingInitializer:
         self.keyboard_thread.daemon = True
         self.keyboard_thread.start()
         
-        rospy.loginfo("=== GPS Heading Initializer 시작 ===")
+        rospy.loginfo("=== GPS Heading Initializer 시작 (Python 3.8) ===")
         rospy.loginfo("Space바를 눌러 초기 heading 캘리브레이션을 시작하세요.")
         rospy.loginfo(f"전방 목표 거리: {self.forward_distance}m")
         rospy.loginfo(f"최소 이동 속도: {self.min_speed_threshold} m/s")
@@ -97,7 +97,7 @@ class GPSHeadingInitializer:
             # 터미널 설정 복원
             try:
                 termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
-            except:
+            except Exception:
                 pass
     
     def handle_space_press(self):
@@ -218,90 +218,72 @@ class GPSHeadingInitializer:
                 self.publish_utm_pose(utm_point, gps_msg.header.stamp)
                 
             except Exception as e:
-                rospy.logwarn(f"GPS 데이터 처리 중 오류: {e}")
+                rospy.logerr(f"GPS 콜백 처리 오류: {e}")
     
     def calculate_and_set_heading(self):
-        """GPS 데이터를 사용하여 heading 계산 및 설정"""
-        if len(self.gps_data_buffer) < 5:  # 충분한 데이터 확보
+        """GPS 이동 데이터를 통해 heading 계산 및 설정"""
+        if len(self.gps_data_buffer) < 5:  # 최소 5개 샘플 필요
             return
             
-        # 최신 데이터와 시작 데이터 비교
-        latest_data = self.gps_data_buffer[-1]
-        start_data = self.gps_data_buffer[0]
+        # 이동 거리 계산
+        recent_data = list(self.gps_data_buffer)[-5:]  # 최근 5개 데이터
+        start_pos = recent_data[0]
+        end_pos = recent_data[-1]
         
-        # 이동 거리 및 방향 계산
-        dx = latest_data['x'] - start_data['x']
-        dy = latest_data['y'] - start_data['y']
-        total_distance = np.sqrt(dx**2 + dy**2)
+        dx = end_pos['x'] - start_pos['x']
+        dy = end_pos['y'] - start_pos['y']
+        distance = np.sqrt(dx*dx + dy*dy)
         
-        # 시간 차이 계산
-        time_diff = (latest_data['timestamp'] - start_data['timestamp']).to_sec()
+        # 충분히 이동했는지 확인
+        if distance < self.min_speed_threshold * 2:  # 2초간 최소 이동 거리
+            return
         
-        if time_diff > 0:
-            avg_speed = total_distance / time_diff
-            
-            # 최소 속도 및 거리 임계값 확인
-            if avg_speed >= self.min_speed_threshold and total_distance >= 1.0:
-                # 실제 이동 방향을 기반으로 heading 계산
-                measured_heading = np.arctan2(dy, dx)
-                
-                # 로봇을 정지시키기
-                self.stop_robot()
-                
-                # 초기 pose 설정
-                self.set_initial_pose(latest_data['x'], latest_data['y'], 
-                                    measured_heading, latest_data['covariance'])
-                self.heading_initialized = True
-                self.calibration_active = False
-                
-                rospy.loginfo("🎉 GPS 기반 Heading 캘리브레이션 완료!")
-                rospy.loginfo(f"  📍 최종 위치: ({latest_data['x']:.2f}, {latest_data['y']:.2f})")
-                rospy.loginfo(f"  🧭 측정된 Heading: {np.degrees(measured_heading):.1f}도")
-                rospy.loginfo(f"  📏 총 이동거리: {total_distance:.2f}m")
-                rospy.loginfo(f"  ⏱️  평균 속도: {avg_speed:.2f} m/s")
-                
-                self.publish_status("캘리브레이션 완료!")
-                
-    def stop_robot(self):
-        """로봇 정지"""
-        stop_cmd = Twist()
-        for _ in range(5):  # 확실한 정지를 위해 여러 번 발송
-            self.cmd_vel_pub.publish(stop_cmd)
-            rospy.sleep(0.1)
+        # Heading 계산
+        calculated_heading = np.arctan2(dy, dx)
+        
+        # Initial pose 설정
+        self.set_initial_pose_with_heading(calculated_heading)
+        
+        rospy.loginfo(f"🧭 GPS 기반 Heading 계산 완료: {np.degrees(calculated_heading):.1f}도")
+        rospy.loginfo(f"📏 이동 거리: {distance:.2f}m")
+        
+        self.heading_initialized = True
+        self.calibration_active = False
+        self.publish_status(f"Heading 캘리브레이션 완료: {np.degrees(calculated_heading):.1f}도")
     
-    def set_initial_pose(self, x, y, heading, covariance):
-        """초기 pose 설정"""
+    def set_initial_pose_with_heading(self, heading):
+        """계산된 heading으로 initial pose 설정"""
         initial_pose = PoseWithCovarianceStamped()
         initial_pose.header.stamp = rospy.Time.now()
         initial_pose.header.frame_id = self.fixed_frame
         
-        # 위치 설정
-        initial_pose.pose.pose.position.x = x
-        initial_pose.pose.pose.position.y = y
+        # 현재 GPS 기반 위치 사용
+        if len(self.gps_data_buffer) > 0:
+            latest_gps = self.gps_data_buffer[-1]
+            initial_pose.pose.pose.position.x = latest_gps['x']
+            initial_pose.pose.pose.position.y = latest_gps['y']
+        else:
+            initial_pose.pose.pose.position.x = 0.0
+            initial_pose.pose.pose.position.y = 0.0
+            
         initial_pose.pose.pose.position.z = 0.0
         
-        # 방향 설정 (쿼터니언)
-        q = quaternion_from_euler(0, 0, heading)
-        initial_pose.pose.pose.orientation.x = q[0]
-        initial_pose.pose.pose.orientation.y = q[1]
-        initial_pose.pose.pose.orientation.z = q[2]
-        initial_pose.pose.pose.orientation.w = q[3]
+        # 계산된 heading으로 orientation 설정
+        quat = quaternion_from_euler(0, 0, heading)
+        initial_pose.pose.pose.orientation.x = quat[0]
+        initial_pose.pose.pose.orientation.y = quat[1]
+        initial_pose.pose.pose.orientation.z = quat[2]
+        initial_pose.pose.pose.orientation.w = quat[3]
         
-        # 공분산 설정
-        initial_pose.pose.covariance = [0.0] * 36
-        if len(covariance) >= 9:
-            initial_pose.pose.covariance[0] = covariance[0]   # x-x
-            initial_pose.pose.covariance[7] = covariance[4]   # y-y
-            initial_pose.pose.covariance[35] = 0.05           # yaw-yaw (정밀한 값)
-        else:
-            # 기본 공분산 값
-            initial_pose.pose.covariance[0] = 0.5   # x
-            initial_pose.pose.covariance[7] = 0.5   # y
-            initial_pose.pose.covariance[35] = 0.05 # yaw
+        # Covariance 설정 (GPS 기반이므로 위치는 높은 신뢰도, heading은 중간 신뢰도)
+        covariance = [0.0] * 36
+        covariance[0] = 0.25   # x
+        covariance[7] = 0.25   # y
+        covariance[35] = 0.1   # yaw (계산된 heading)
+        initial_pose.pose.covariance = covariance
         
-        # 초기 pose 발행
         self.initial_pose_pub.publish(initial_pose)
-        rospy.loginfo("📤 초기 pose가 /initialpose 토픽으로 발행되었습니다.")
+        rospy.loginfo("📍 Initial pose with GPS heading published")
     
     def publish_utm_to_map_transform(self, utm_point):
         """UTM에서 map으로의 transform 발행"""

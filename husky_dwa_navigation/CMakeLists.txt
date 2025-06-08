@@ -18,23 +18,58 @@ find_package(catkin REQUIRED COMPONENTS
   pointcloud_to_laserscan
   costmap_2d
   dynamic_reconfigure
+  geographic_msgs
+  geodesy
 )
 
-catkin_package()
+catkin_package(
+  CATKIN_DEPENDS
+    roscpp
+    rospy
+    tf
+    tf2_ros
+    tf2_geometry_msgs
+    std_msgs
+    geometry_msgs
+    sensor_msgs
+    nav_msgs
+    move_base
+    dwa_local_planner
+    pcl_ros
+    nodelet
+    pointcloud_to_laserscan
+    costmap_2d
+    dynamic_reconfigure
+    geographic_msgs
+    geodesy
+)
 
 include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-# Python 스크립트 설치 설정 추가
+# Python 3 스크립트 설치 설정
 catkin_install_python(
   PROGRAMS 
-    scripts/navigation_manager_node.py
+    scripts/gps_heading_initializer.py
+    scripts/utm_localization_node.py
+    scripts/space_key_publisher.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
-# 기존 설치 설정
+# 설정 파일 및 런치 파일 설치
 install(
-  DIRECTORY launch config
+  DIRECTORY 
+    launch 
+    config
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+
+# Python 스크립트에 실행 권한 부여
+install(
+  PROGRAMS
+    scripts/gps_heading_initializer.py
+    scripts/utm_localization_node.py
+    scripts/space_key_publisher.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

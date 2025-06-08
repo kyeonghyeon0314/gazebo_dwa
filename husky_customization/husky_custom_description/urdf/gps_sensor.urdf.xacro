@@ -34,25 +34,6 @@
       <!-- Husky 뒤쪽 상단에 GPS 센서 위치 -->
       <origin xyz="-0.3 0 0.3" rpy="0 0 0"/>
     </joint>
-
-    <!-- 월드 파일 기준 GPS 플러그인 (위도 0°, 경도 0°) -->
-    <gazebo reference="gps_link">
-      <plugin name="gps_controller" filename="libhector_gazebo_ros_gps.so">
-        <alwaysOn>true</alwaysOn>
-        <updateRate>10.0</updateRate>
-        <bodyName>gps_link</bodyName>
-        <frameId>gps_link</frameId>
-        <topicName>/gps/fix</topicName>
-        <!-- 월드 파일과 동일한 GPS 좌표 (위도 0°, 경도 0°) -->
-        <referenceLatitude>0.0</referenceLatitude>
-        <referenceLongitude>0.0</referenceLongitude>
-        <referenceHeading>0</referenceHeading>
-        <referenceAltitude>0</referenceAltitude>
-        <!-- 시뮬레이션용 최소 노이즈 -->
-        <drift>0.001 0.001 0.001</drift>
-        <gaussianNoise>0.01 0.01 0.01</gaussianNoise>
-      </plugin>
-    </gazebo>
   
   </xacro:macro>
 </robot>

@@ -1,8 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
-Space 키 입력을 토픽으로 발행하는 유틸리티 노드
+Space 키 입력을 토픽으로 발행하는 유틸리티 노드 (Python 3.8 호환)
 GUI 버튼이나 다른 방법으로 Space 키 이벤트를 발행할 수 있습니다.
 """
 
@@ -44,8 +44,7 @@ class SpaceKeyPublisher:
         # 시작 버튼
         self.start_button = ttk.Button(main_frame, 
                                       text="🚀 Heading 캘리브레이션 시작", 
-                                      command=self.send_space_signal,
-                                      style='Accent.TButton')
+                                      command=self.send_space_signal)
         self.start_button.grid(row=2, column=0, pady=(0, 10), ipadx=20, ipady=10)
         
         # 상태 라벨
@@ -57,14 +56,18 @@ class SpaceKeyPublisher:
         
         # 스타일 설정
         style = ttk.Style()
-        style.configure('Accent.TButton', font=('Arial', 12, 'bold'))
+        try:
+            style.configure('Accent.TButton', font=('Arial', 12, 'bold'))
+        except Exception:
+            # 스타일 설정이 실패해도 계속 진행
+            pass
         
         # 중앙 정렬
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(0, weight=1)
         
-        rospy.loginfo("Space Key Publisher GUI가 시작되었습니다.")
+        rospy.loginfo("Space Key Publisher GUI가 시작되었습니다. (Python 3.8)")
         
     def send_space_signal(self):
         """Space 키 신호 발송"""
@@ -105,7 +108,10 @@ class SpaceKeyPublisher:
         except Exception as e:
             rospy.logerr(f"GUI 실행 오류: {e}")
         finally:
-            self.root.quit()
+            try:
+                self.root.quit()
+            except Exception:
+                pass
     
     def ros_spin(self):
         """ROS 스핀 (별도 스레드)"""
@@ -118,3 +124,5 @@ if __name__ == '__main__':
         space_publisher.run()
     except rospy.ROSInterruptException:
         pass
+    except Exception as e:
+        rospy.logerr(f"Space Key Publisher 오류: {e}")

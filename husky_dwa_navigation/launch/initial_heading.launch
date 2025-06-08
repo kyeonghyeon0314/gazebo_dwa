@@ -15,15 +15,11 @@
     <remap from="/gps/fix" to="/gps/fix"/>
   </node>
 
-  <!-- 선택사항: GUI 버튼으로 Space 키 이벤트 발생 -->
+  <!-- Space 키 입력을 위한 GUI 유틸리티 -->
   <node pkg="husky_dwa_navigation" type="space_key_publisher.py" name="space_key_publisher" output="screen"/>
 
-  <!-- 상태 모니터링을 위한 echo 노드들 -->
+  <!-- 상태 모니터링을 위한 echo 노드 -->
   <node pkg="rostopic" type="rostopic" name="heading_status_monitor" 
         args="echo /gps_heading_status" output="screen"/>
-        
-  <!-- 정보 출력 -->
-  <node pkg="rosrun" type="rosrun" name="heading_info" 
-        args="rosgraph_msgs rostopic echo /gps_heading_status" output="screen"/>
 
 </launch>
