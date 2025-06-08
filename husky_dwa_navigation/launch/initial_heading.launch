@@ -1,11 +1,8 @@
 <?xml version="1.0"?>
 <launch>
-  <!-- GPS 토픽 자동 릴레이 (navsat/fix -> gps/fix) 
-  <node pkg="topic_tools" type="relay" name="gps_topic_relay" 
-        args="/navsat/fix /gps/fix" output="log"/>-->
-
   <!-- GPS 기반 초기 Heading 설정 노드 -->
-  <node pkg="husky_dwa_navigation" type="gps_heading_initializer.py" name="gps_heading_initializer" output="screen">
+  <node pkg="husky_dwa_navigation" type="gps_heading_initializer.py" 
+        name="gps_heading_initializer" output="screen">
     <param name="fixed_frame" value="utm"/>
     <param name="robot_frame" value="base_link"/>
     <param name="gps_frame" value="gps_link"/>
@@ -16,14 +13,10 @@
     <param name="utm_band" value=""/>
   </node>
 
-  <!-- 상태 모니터링 (간소화된 출력) -->
-  <node pkg="rostopic" type="rostopic" name="heading_status_monitor" 
-        args="echo /gps_heading_status -n 1" output="log"/>
-
-  <!-- 사용법 안내 (로그로 출력) -->
+  <!-- 사용법 안내 -->
   <param name="usage_info" value="=== GPS Heading Calibration ===
-✅ GPS 토픽이 자동으로 연결되었습니다.
-🚀 Space 키 트리거: rostopic pub -1 /space_key_pressed std_msgs/Bool true
+✅ Space 키로 캘리브레이션 시작
+🎯 전방 3m 이동으로 heading 계산
 📊 상태 확인: rostopic echo /gps_heading_status"/>
 
 </launch>

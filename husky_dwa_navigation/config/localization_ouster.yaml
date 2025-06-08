@@ -1,73 +1,29 @@
-# robot_localization EKF 설정 - Ouster IMU 사용 (Z축 문제 해결)
-frequency: 30
-sensor_timeout: 0.1
-two_d_mode: true                    # 2D 모드 활성화 (Z축 드리프트 방지)
-transform_time_offset: 0.0
-transform_timeout: 0.0
-print_diagnostics: true
-debug: false
-debug_out_file: /path/to/debug/file.txt
-
-map_frame: utm                      # UTM을 최상위 프레임으로 설정
 odom_frame: odom
 base_link_frame: base_link
-world_frame: utm                    # World frame을 UTM으로 설정
+world_frame: utm
 
-# Odometry 소스 설정 (Z축 비활성화)
-odom0: /husky_velocity_controller/odom
-odom0_config: [false, false, false,    # x, y, z 위치 (z 비활성화)
-               false, false, false,    # roll, pitch, yaw 회전 (yaw만 사용)
-               true,  true,  false,    # x, y, z 속도 (z 비활성화) 
-               false, false, true,     # roll, pitch, yaw 각속도 (yaw만 사용)
-               false, false, false]    # x, y, z 가속도 (비활성화)
-odom0_queue_size: 2
-odom0_nodelay: false
+two_d_mode: true
+
+predict_to_current_time: true
+
+frequency: 50
+
+odom0: husky_velocity_controller/odom
+odom0_config: [false, false, false,
+               false, false, false,
+               true, true, true,
+               false, false, true,
+               false, false, false]
 odom0_differential: false
-odom0_relative: false
+odom0_queue_size: 10
 
-# Ouster IMU 설정 (방향 정보만 사용, Z축 가속도 제외)
-imu0: /os1/imu
-imu0_config: [false, false, false,     # x, y, z 위치 (비활성화)
-              true,  true,  false,     # roll, pitch, yaw 회전 (yaw 비활성화 - 2D 모드)
-              false, false, false,     # x, y, z 속도 (비활성화)
-              true,  true,  true,      # roll, pitch, yaw 각속도
-              false, false, false]     # x, y, z 가속도 (Z축 문제 방지를 위해 비활성화)
-imu0_nodelay: false
-imu0_differential: false
-imu0_relative: true
-imu0_queue_size: 5
+imu0: os1/imu
+imu0_config: [false, false, false,
+              true, true, true,
+              false, false, false,
+              true, true, true,
+              false, false, false]
+
+imu0_differential: true
+imu0_queue_size: 10
 imu0_remove_gravitational_acceleration: true
-
-# 프로세스 노이즈 공분산 매트릭스 (2D 모드에 최적화)
-process_noise_covariance: [0.05, 0,    0,    0,    0,    0,    0,     0,     0,    0,    0,    0,    0,    0,    0,
-                          0,    0.05, 0,    0,    0,    0,    0,     0,     0,    0,    0,    0,    0,    0,    0,
-                          0,    0,    0.06, 0,    0,    0,    0,     0,     0,    0,    0,    0,    0,    0,    0,
-                          0,    0,    0,    0.03, 0,    0,    0,     0,     0,    0,    0,    0,    0,    0,    0,
-                          0,    0,    0,    0,    0.03, 0,    0,     0,     0,    0,    0,    0,    0,    0,    0,
-                          0,    0,    0,    0,    0,    0.01, 0,     0,     0,    0,    0,    0,    0,    0,    0,
-                          0,    0,    0,    0,    0,    0,    0.025, 0,     0,    0,    0,    0,    0,    0,    0,
-                          0,    0,    0,    0,    0,    0,    0,     0.025, 0,    0,    0,    0,    0,    0,    0,
-                          0,    0,    0,    0,    0,    0,    0,     0,     0.04, 0,    0,    0,    0,    0,    0,
-                          0,    0,    0,    0,    0,    0,    0,     0,     0,    0.01, 0,    0,    0,    0,    0,
-                          0,    0,    0,    0,    0,    0,    0,     0,     0,    0,    0.01, 0,    0,    0,    0,
-                          0,    0,    0,    0,    0,    0,    0,     0,     0,    0,    0,    0.02, 0,    0,    0,
-                          0,    0,    0,    0,    0,    0,    0,     0,     0,    0,    0,    0,    0.01, 0,    0,
-                          0,    0,    0,    0,    0,    0,    0,     0,     0,    0,    0,    0,    0,    0.01, 0,
-                          0,    0,    0,    0,    0,    0,    0,     0,     0,    0,    0,    0,    0,    0,    0.015]
-
-# 초기 추정 공분산
-initial_estimate_covariance: [1e-9, 0,    0,    0,    0,    0,    0,    0,    0,    0,     0,     0,     0,    0,    0,
-                             0,    1e-9, 0,    0,    0,    0,    0,    0,    0,    0,     0,     0,     0,    0,    0,
-                             0,    0,    1e-9, 0,    0,    0,    0,    0,    0,    0,     0,     0,     0,    0,    0,
-                             0,    0,    0,    1e-9, 0,    0,    0,    0,    0,    0,     0,     0,     0,    0,    0,
-                             0,    0,    0,    0,    1e-9, 0,    0,    0,    0,    0,     0,     0,     0,    0,    0,
-                             0,    0,    0,    0,    0,    1e-9, 0,    0,    0,    0,     0,     0,     0,    0,    0,
-                             0,    0,    0,    0,    0,    0,    1e-9, 0,    0,    0,     0,     0,     0,    0,    0,
-                             0,    0,    0,    0,    0,    0,    0,    1e-9, 0,    0,     0,     0,     0,    0,    0,
-                             0,    0,    0,    0,    0,    0,    0,    0,    1e-9, 0,     0,     0,     0,    0,    0,
-                             0,    0,    0,    0,    0,    0,    0,    0,    0,    1e-9,  0,     0,     0,    0,    0,
-                             0,    0,    0,    0,    0,    0,    0,    0,    0,    0,     1e-9,  0,     0,    0,    0,
-                             0,    0,    0,    0,    0,    0,    0,    0,    0,    0,     0,     1e-9,  0,    0,    0,
-                             0,    0,    0,    0,    0,    0,    0,    0,    0,    0,     0,     0,     1e-9, 0,    0,
-                             0,    0,    0,    0,    0,    0,    0,    0,    0,    0,     0,     0,     0,    1e-9, 0,
-                             0,    0,    0,    0,    0,    0,    0,    0,    0,    0,     0,     0,     0,    0,    1e-9]

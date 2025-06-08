@@ -38,6 +38,8 @@ class GPSHeadingInitializer:
         self.forward_distance = rospy.get_param('~forward_distance', 3.0)  # 전방 3m
         self.utm_zone = rospy.get_param('~utm_zone', None)
         self.utm_band = rospy.get_param('~utm_band', None)
+
+        self.print_initialization_info()
         
         # 상태 변수
         self.lock = threading.Lock()
@@ -71,7 +73,7 @@ class GPSHeadingInitializer:
         self.keyboard_thread.daemon = True
         self.keyboard_thread.start()
         
-        rospy.loginfo("=== GPS Heading Initializer 시작 (Python 3.8) ===")
+        rospy.loginfo("=== GPS Heading Initializer 시작 ===")
         rospy.loginfo("Space바를 눌러 초기 heading 캘리브레이션을 시작하세요.")
         rospy.loginfo(f"전방 목표 거리: {self.forward_distance}m")
         rospy.loginfo(f"최소 이동 속도: {self.min_speed_threshold} m/s")
@@ -123,41 +125,43 @@ class GPSHeadingInitializer:
             return
             
         self.calibration_active = True
-        self.publish_status("캘리브레이션 시작: 전방 목표점 생성 중...")
+        rospy.loginfo("🚀 캘리브레이션 시작!")
         
         # 현재 로봇 위치 가져오기
         try:
-            transform = self.tf_buffer.lookup_transform(
+            # TF가 사용 가능할 때까지 대기
+            if self.tf_buffer.can_transform(
                 self.fixed_frame, self.robot_frame, 
-                rospy.Time(), rospy.Duration(1.0))
-            
-            current_x = transform.transform.translation.x
-            current_y = transform.transform.translation.y
-            
-            # 현재 방향 가져오기 (추정값 또는 0)
-            orientation = transform.transform.rotation
-            _, _, current_yaw = euler_from_quaternion([
-                orientation.x, orientation.y, orientation.z, orientation.w])
-            
+                rospy.Time(), rospy.Duration(5.0)):
+                
+                transform = self.tf_buffer.lookup_transform(
+                    self.fixed_frame, self.robot_frame, 
+                    rospy.Time(), rospy.Duration(1.0))
+                
+                current_x = transform.transform.translation.x
+                current_y = transform.transform.translation.y
+                
+                rospy.loginfo(f"🎯 현재 위치: ({current_x:.2f}, {current_y:.2f})")
+                
+            else:
+                raise Exception("TF not available")
+                
         except Exception as e:
-            rospy.logwarn(f"현재 위치 가져오기 실패, GPS 위치 사용: {e}")
+            rospy.logwarn(f"TF 조회 실패, GPS 위치 사용: {str(e)}")
             if len(self.gps_data_buffer) > 0:
                 latest_gps = self.gps_data_buffer[-1]
                 current_x = latest_gps['x']
                 current_y = latest_gps['y']
-                current_yaw = 0.0  # 초기 방향 추정값
+                rospy.loginfo(f"🎯 GPS 기반 위치: ({current_x:.2f}, {current_y:.2f})")
             else:
-                rospy.logerr("❌ GPS 데이터가 없어 캘리브레이션을 시작할 수 없습니다.")
+                rospy.logerr("❌ 위치 정보를 가져올 수 없습니다.")
                 return
         
-        # 전방 3m 목표점 생성
-        forward_x = current_x + self.forward_distance * np.cos(current_yaw)
-        forward_y = current_y + self.forward_distance * np.sin(current_yaw)
+        # 전방 목표점 설정
+        forward_x = current_x + self.forward_distance * np.cos(0)  # 초기 방향 추정
+        forward_y = current_y + self.forward_distance * np.sin(0)
         
-        self.send_forward_goal(forward_x, forward_y)
-        self.initial_robot_pose = {'x': current_x, 'y': current_y, 'yaw': current_yaw}
-        
-        rospy.loginfo(f"🎯 전방 목표점 설정: ({forward_x:.2f}, {forward_y:.2f})")
+        rospy.loginfo(f"🎯 전방 목표점: ({forward_x:.2f}, {forward_y:.2f})")
         rospy.loginfo("🚶 로봇이 이동하여 heading을 측정합니다...")
         
     def send_forward_goal(self, x, y):
@@ -173,29 +177,43 @@ class GPSHeadingInitializer:
         self.calibration_goal_pub.publish(goal)
         self.forward_goal_sent = True
         self.publish_status("전방 목표점으로 이동 중...")
+
+    def print_initialization_info(self):
+        """초기화 정보를 깔끔하게 한 번에 출력"""
+        info_msg = f"""
+{'='*60}
+GPS Heading Initializer 시작 (Python 3.8)
+{'='*60}
+설정 정보:
+- 고정 프레임: {self.fixed_frame}
+- 로봇 프레임: {self.robot_frame}
+- 전방 목표 거리: {self.forward_distance}m
+- 최소 이동 속도: {self.min_speed_threshold} m/s
+- 샘플 수: {self.heading_samples}개
+
+Space바를 눌러 초기 heading 캘리브레이션을 시작하세요.
+{'='*60}
+"""
+        rospy.loginfo(info_msg)
+
+
+        
         
     def gps_callback(self, gps_msg):
         """GPS 데이터 콜백"""
-        if gps_msg.status.status < 0:  # GPS 신호가 없는 경우
-            return
-            
-        with self.lock:
-            try:
-                # GPS 좌표를 UTM으로 변환
+        try:
+            if gps_msg.status.status >= 0:
                 utm_point = utm.fromLatLong(gps_msg.latitude, gps_msg.longitude)
                 
-                # UTM zone 초기화
-                if self.utm_zone is None:
-                    self.utm_zone = utm_point.zone
-                    self.utm_band = utm_point.band
-                    rospy.loginfo(f"🌍 UTM Zone 설정: {self.utm_zone}{self.utm_band}")
-                
-                # 첫 번째 GPS 데이터로 원점 설정
                 if not self.initial_position_set:
                     self.utm_origin = utm_point
                     self.initial_position_set = True
-                    self.publish_utm_to_map_transform(utm_point)
-                    rospy.loginfo(f"📍 UTM 원점 설정: {utm_point.easting:.2f}, {utm_point.northing:.2f}")
+                    
+                    # 개선: 원점 설정 정보를 깔끔하게 출력
+                    rospy.loginfo(f"📍 UTM 원점 설정 완료")
+                    rospy.loginfo(f"   - UTM Zone: {utm_point.zone}{utm_point.band}")
+                    rospy.loginfo(f"   - 좌표: ({utm_point.easting:.2f}, {utm_point.northing:.2f})")
+                    rospy.loginfo(f"   - 캘리브레이션 준비 완료")
                 
                 # GPS 데이터를 버퍼에 저장 (상대 좌표)
                 relative_x = utm_point.easting - self.utm_origin.easting
@@ -217,8 +235,8 @@ class GPSHeadingInitializer:
                 # UTM pose 발행
                 self.publish_utm_pose(utm_point, gps_msg.header.stamp)
                 
-            except Exception as e:
-                rospy.logerr(f"GPS 콜백 처리 오류: {e}")
+        except Exception as e:
+            rospy.logerr(f"GPS 콜백 처리 오류: {e}")
     
     def calculate_and_set_heading(self):
         """GPS 이동 데이터를 통해 heading 계산 및 설정"""
