@@ -1,61 +1,64 @@
-<!-- GPS 센서를 Husky에 추가하기 위한 URDF -->
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
   
-  <!-- GPS 센서 링크 정의 -->
-  <link name="gps_link">
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <box size="0.05 0.05 0.02"/>
-      </geometry>
-      <material name="gps_material">
-        <color rgba="0.2 0.2 0.8 1.0"/>
-      </material>
-    </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <box size="0.05 0.05 0.02"/>
-      </geometry>
-    </collision>
-    <inertial>
-      <mass value="0.1"/>
-      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
-    </inertial>
-  </link>
+  <!-- GPS 매크로 정의 -->
+  <xacro:macro name="gps_sensor" params="parent">
+    
+    <!-- GPS 센서 링크 정의 -->
+    <link name="gps_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.05 0.05 0.02"/>
+        </geometry>
+        <material name="gps_material">
+          <color rgba="0.2 0.2 0.8 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.05 0.05 0.02"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="0.1"/>
+        <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+      </inertial>
+    </link>
 
-  <!-- GPS 센서를 base_link에 조인트로 연결 -->
-  <joint name="gps_joint" type="fixed">
-    <parent link="base_link"/>
-    <child link="gps_link"/>
-    <!-- Husky 뒤쪽 상단에 GPS 센서 위치 -->
-    <origin xyz="-0.3 0 0.3" rpy="0 0 0"/>
-  </joint>
+    <!-- GPS 센서를 parent에 조인트로 연결 -->
+    <joint name="gps_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="gps_link"/>
+      <!-- Husky 뒤쪽 상단에 GPS 센서 위치 -->
+      <origin xyz="-0.3 0 0.3" rpy="0 0 0"/>
+    </joint>
 
-  <!-- Gazebo GPS 플러그인 -->
-  <gazebo reference="gps_link">
-    <sensor type="gps" name="husky_gps">
-      <pose>0 0 0 0 0 0</pose>
-      <visualize>true</visualize>
-      <update_rate>10.0</update_rate>
-      <plugin name="gps_controller" filename="libhector_gazebo_ros_gps.so">
-        <alwaysOn>true</alwaysOn>
-        <updateRate>10.0</updateRate>
-        <bodyName>gps_link</bodyName>
-        <frameId>gps_link</frameId>
-        <topicName>/gps/fix</topicName>
-        <velocityTopicName>/gps/fix_velocity</velocityTopicName>
-        <referenceLatitude>37.4419</referenceLatitude>
-        <referenceLongitude>-122.1430</referenceLongitude>
-        <referenceHeading>0</referenceHeading>
-        <referenceAltitude>10</referenceAltitude>
-        <drift>0.01 0.01 0.01</drift>
-        <gaussianNoise>0.1 0.1 0.1</gaussianNoise>
-        <velocityDrift>0 0 0</velocityDrift>
-        <velocityGaussianNoise>0.1 0.1 0.1</velocityGaussianNoise>
-      </plugin>
-    </sensor>
-  </gazebo>
-
+    <!-- Gazebo GPS 플러그인 -->
+    <gazebo reference="gps_link">
+      <sensor type="gps" name="husky_gps">
+        <pose>0 0 0 0 0 0</pose>
+        <visualize>true</visualize>
+        <update_rate>10.0</update_rate>
+        <plugin name="gps_controller" filename="libhector_gazebo_ros_gps.so">
+          <alwaysOn>true</alwaysOn>
+          <updateRate>10.0</updateRate>
+          <bodyName>gps_link</bodyName>
+          <frameId>gps_link</frameId>
+          <topicName>/gps/fix</topicName>
+          <velocityTopicName>/gps/fix_velocity</velocityTopicName>
+          <referenceLatitude>37.4419</referenceLatitude>
+          <referenceLongitude>-122.1430</referenceLongitude>
+          <referenceHeading>0</referenceHeading>
+          <referenceAltitude>10</referenceAltitude>
+          <drift>0.01 0.01 0.01</drift>
+          <gaussianNoise>0.1 0.1 0.1</gaussianNoise>
+          <velocityDrift>0 0 0</velocityDrift>
+          <velocityGaussianNoise>0.1 0.1 0.1</velocityGaussianNoise>
+        </plugin>
+      </sensor>
+    </gazebo>
+  
+  </xacro:macro>
 </robot>

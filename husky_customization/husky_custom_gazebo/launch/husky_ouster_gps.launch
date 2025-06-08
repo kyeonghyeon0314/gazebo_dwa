@@ -40,7 +40,7 @@
         output = "screen"
         args="-urdf -model husky -param robot_description -z 1" /> 
 
-  <!-- RViz 시작 
-  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find husky_custom_gazebo)/rviz/husky_ouster.rviz" />
-  -->
+  <!-- RViz 시작 -->
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find husky_custom_gazebo)/rviz/husky_ouster_gps.rviz" />
+  
 </launch>
