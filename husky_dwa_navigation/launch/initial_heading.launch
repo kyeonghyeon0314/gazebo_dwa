@@ -1,25 +1,29 @@
 <?xml version="1.0"?>
 <launch>
+  <!-- GPS 토픽 자동 릴레이 (navsat/fix -> gps/fix) 
+  <node pkg="topic_tools" type="relay" name="gps_topic_relay" 
+        args="/navsat/fix /gps/fix" output="log"/>-->
+
   <!-- GPS 기반 초기 Heading 설정 노드 -->
   <node pkg="husky_dwa_navigation" type="gps_heading_initializer.py" name="gps_heading_initializer" output="screen">
     <param name="fixed_frame" value="utm"/>
     <param name="robot_frame" value="base_link"/>
     <param name="gps_frame" value="gps_link"/>
-    <param name="min_speed_threshold" value="0.2"/>  <!-- 최소 이동 속도 (m/s) -->
-    <param name="heading_samples" value="15"/>        <!-- heading 계산용 샘플 수 -->
-    <param name="forward_distance" value="3.0"/>      <!-- 전방 목표점 거리 (m) -->
-    <param name="utm_zone" value=""/>                 <!-- UTM zone (자동 설정) -->
-    <param name="utm_band" value=""/>                 <!-- UTM band (자동 설정) -->
-    
-    <!-- GPS 토픽 리맵핑 (실제 GPS 토픽 이름에 맞게 수정) -->
-    <remap from="/gps/fix" to="/gps/fix"/>
+    <param name="min_speed_threshold" value="0.2"/>
+    <param name="heading_samples" value="15"/>
+    <param name="forward_distance" value="3.0"/>
+    <param name="utm_zone" value=""/>
+    <param name="utm_band" value=""/>
   </node>
 
-  <!-- Space 키 입력을 위한 GUI 유틸리티 -->
-  <node pkg="husky_dwa_navigation" type="space_key_publisher.py" name="space_key_publisher" output="screen"/>
-
-  <!-- 상태 모니터링을 위한 echo 노드 -->
+  <!-- 상태 모니터링 (간소화된 출력) -->
   <node pkg="rostopic" type="rostopic" name="heading_status_monitor" 
-        args="echo /gps_heading_status" output="screen"/>
+        args="echo /gps_heading_status -n 1" output="log"/>
+
+  <!-- 사용법 안내 (로그로 출력) -->
+  <param name="usage_info" value="=== GPS Heading Calibration ===
+✅ GPS 토픽이 자동으로 연결되었습니다.
+🚀 Space 키 트리거: rostopic pub -1 /space_key_pressed std_msgs/Bool true
+📊 상태 확인: rostopic echo /gps_heading_status"/>
 
 </launch>

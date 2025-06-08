@@ -6,7 +6,6 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /PointCloud21
       Splitter Ratio: 0.5
     Tree Height: 917
   - Class: rviz/Selection
@@ -266,7 +265,7 @@ Visualization Manager:
           Scale: 1
           Value: true
         Value: true
-      Enabled: true
+      Enabled: false
       Keep: 100
       Name: Odometry
       Position Tolerance: 0.10000000149011612
@@ -283,7 +282,7 @@ Visualization Manager:
         Value: Arrow
       Topic: /odometry/filtered
       Unreliable: false
-      Value: true
+      Value: false
     - Alpha: 1
       Buffer Length: 1
       Class: rviz/Path
@@ -422,7 +421,7 @@ Visualization Manager:
       History Length: 1
       Name: Imu
       Queue Size: 10
-      Topic: /imu/data
+      Topic: /os1/imu
       Unreliable: false
       Value: true
   Enabled: true
@@ -453,7 +452,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 74.09629821777344
+      Distance: 522.3060302734375
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -469,9 +468,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.2547953128814697
+      Pitch: -0.01520261075347662
       Target Frame: <Fixed Frame>
-      Yaw: 3.0585811138153076
+      Yaw: 5.228594779968262
     Saved: ~
 Window Geometry:
   Displays:

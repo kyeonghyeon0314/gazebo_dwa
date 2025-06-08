@@ -7,7 +7,11 @@
   <!-- 기존 husky ouster 실행 -->
   <include file="$(find husky_custom_gazebo)/launch/husky_ouster_gps.launch"/>
 
-  <!-- Robot Localization EKF 노드 - Ouster IMU 사용 -->
+  <!-- GPS 토픽 자동 릴레이 (navsat/fix -> gps/fix) -->
+  <node pkg="topic_tools" type="relay" name="gps_topic_relay" 
+        args="/navsat/fix /gps/fix" output="log"/>
+
+  <!-- Robot Localization EKF 노드 - 수정된 설정 사용 -->
   <node pkg="robot_localization" type="ekf_localization_node" name="ekf_se_odom" clear_params="true">
     <rosparam command="load" file="$(find husky_dwa_navigation)/config/localization_ouster.yaml" />
     
@@ -17,16 +21,15 @@
   </node>
 
   <!-- UTM 프레임을 최상위로 설정 (Fixed Frame) -->
-  <!-- utm -> odom 순서로 변경 (utm이 부모, odom이 자식) -->
   <node pkg="tf2_ros" type="static_transform_publisher" name="utm_to_odom_static" 
         args="0 0 0 0 0 0 utm odom" 
-        output="screen"/>
+        output="log"/>
 
   <!-- 포인트 클라우드 처리 파이프라인 -->
-  <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="screen"/>
+  <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="log"/>
 
   <!-- Ouster 데이터 다운샘플링 -->
-  <node pkg="nodelet" type="nodelet" name="voxel_grid" args="load pcl/VoxelGrid pcl_manager" output="screen">
+  <node pkg="nodelet" type="nodelet" name="voxel_grid" args="load pcl/VoxelGrid pcl_manager" output="log">
     <remap from="~input" to="/os1/points"/>
     <remap from="~output" to="/filtered_points"/>
     <param name="leaf_size" value="0.10"/>
@@ -36,7 +39,7 @@
   </node>
 
   <!-- PointCloud2를 LaserScan으로 변환 -->
-  <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan">
+  <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan" output="log">
     <remap from="cloud_in" to="/filtered_points"/>
     <remap from="scan" to="/scan"/>
     <param name="angle_min" value="-3.14159"/>
@@ -86,7 +89,7 @@
   </node>
 
   <!-- UTM 기반 Localization 노드 -->
-  <node pkg="husky_dwa_navigation" type="utm_localization_node.py" name="utm_localization" output="screen">
+  <node pkg="husky_dwa_navigation" type="utm_localization_node.py" name="utm_localization" output="log">
     <param name="fixed_frame" value="utm"/>
     <param name="robot_frame" value="base_link"/>
     <param name="odom_frame" value="odom"/>
@@ -95,9 +98,11 @@
     <param name="utm_band" value="$(arg utm_band)"/>
   </node>
 
-  <!-- UTM 프레임 확인을 위한 TF 모니터링 -->
-  <node pkg="rostopic" type="rostopic" name="utm_frame_check" 
-        args="echo /tf_static" 
-        output="screen"/>
+  <!-- 시스템 상태 출력 -->
+  <param name="system_info" value="=== Husky UTM GPS Navigation System ===
+✅ GPS 토픽 자동 연결: /navsat/fix -> /gps/fix
+✅ 2D 모드 EKF 활성화 (Z축 드리프트 방지)
+✅ UTM 좌표계 기반 네비게이션
+🚀 초기 heading 설정: roslaunch husky_dwa_navigation initial_heading_clean.launch"/>
 
 </launch>
