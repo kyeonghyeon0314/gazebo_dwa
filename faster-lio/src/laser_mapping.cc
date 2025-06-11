@@ -340,7 +340,7 @@ void LaserMapping::Run() {
         if (path_pub_en_ || path_save_en_) {
             PublishPath(pub_path_);
         }
-        //return;    // visulizaton non-publish
+        return;    // visulizaton non-publish
         if (scan_pub_en_ || pcd_save_en_) {
             PublishFrameWorld();
         }

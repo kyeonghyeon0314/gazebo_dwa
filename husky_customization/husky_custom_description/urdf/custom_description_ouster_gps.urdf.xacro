@@ -50,6 +50,9 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
   </xacro:OS1-32>
 
    <!-- GPS 추가-->
+  <!-- GPS 센서 포함 -->
   <xacro:include filename="$(find husky_custom_description)/urdf/gps_sensor.urdf.xacro"/>
-  <xacro:gps_sensor parent="base_link"/>
+  
+  <!-- Gazebo 플러그인 포함 -->
+  <xacro:include filename="$(find husky_custom_gazebo)/urdf/custom_description.gazebo.xacro"/>
 </robot>
