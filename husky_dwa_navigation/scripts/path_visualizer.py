@@ -802,13 +802,30 @@ class UTMHeadingCorrection:
         transforms.append(utm_to_camera)
         
         # 🔗 body → base_link (ROS 표준 호환성)
-        body_to_base = TransformStamped()
-        body_to_base.header.stamp = current_time
-        body_to_base.header.frame_id = "body"
-        body_to_base.child_frame_id = "base_link"
-        body_to_base.transform.rotation.w = 1.0
+        # body_to_base = TransformStamped()
+        # body_to_base.header.stamp = current_time
+        # body_to_base.header.frame_id = "body"
+        # body_to_base.child_frame_id = "base_link"
+        # body_to_base.transform.rotation.w = 1.0
         
-        transforms.append(body_to_base)
+        # transforms.append(body_to_base)
+
+        # 🔥 NEW: camera_init → base_link 직접 연결 (body 건너뛰기)
+        camera_to_base = TransformStamped()
+        camera_to_base.header.stamp = current_time
+        camera_to_base.header.frame_id = "camera_init"
+        camera_to_base.child_frame_id = "base_link"
+    
+        # FasterLIO body와 base_link는 보통 동일한 위치
+        camera_to_base.transform.translation.x = 0.0
+        camera_to_base.transform.translation.y = 0.0
+        camera_to_base.transform.translation.z = 0.0
+        camera_to_base.transform.rotation.x = 0.0
+        camera_to_base.transform.rotation.y = 0.0
+        camera_to_base.transform.rotation.z = 0.0
+        camera_to_base.transform.rotation.w = 1.0
+
+        transforms.append(camera_to_base)
         
         # 모든 TF 발행
         self.tf_broadcaster.sendTransform(transforms)

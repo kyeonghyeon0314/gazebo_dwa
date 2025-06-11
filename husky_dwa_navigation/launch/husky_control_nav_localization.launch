@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
   
-  <param name="/use_sim_time" value="true" />
+  <param name="/use_sim_time" value="ture" />
   
   <!-- ===== 로봇 제어, 네비게이션, localization 및 모니터링 담당 ===== -->
   <!-- 환경 독립적: 시뮬레이션과 실제 환경에서 동일하게 사용 -->
@@ -55,21 +55,7 @@
 
   <!-- ===== UTM 좌표계 기반 Localization (GPS Heading 보정) ===== -->
   <node pkg="husky_dwa_navigation" type="path_visualizer.py" name="utm_heading_correction" output="screen">
-    <param name="use_sim_time" value="true" />
-    <remap from="/Odometry" to="/Odometry" />           <!-- FasterLIO odometry (camera_init frame) -->
-    <remap from="/ublox/fix" to="/ublox/fix" />         <!-- GPS 데이터 (lat/lon) -->
-    <!-- 출력 토픽: -->
-    <!-- /fused_odom: UTM 절대좌표 odometry -->
-    <!-- /robot_pose: UTM 절대좌표 pose with covariance -->
-    <!-- TF: utm → camera_init (heading 보정 적용) -->
   </node>
-
-
-  <!-- Ouster 센서와 base_link 연결 -->
-  <node pkg="tf2_ros" type="static_transform_publisher" name="base_to_camera_init" 
-    args="0.3 0 0.51 0 0 0 1 base_link camera_init" />
-
-
 
   <!-- ===== 포인트 클라우드 처리 파이프라인 ===== -->
   <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="screen" />
