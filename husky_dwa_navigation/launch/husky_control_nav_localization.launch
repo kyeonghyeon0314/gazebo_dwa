@@ -1,7 +1,6 @@
 <?xml version="1.0"?>
 <launch>
   
-  <!-- 시뮬레이션 동기화-->
   <param name="/use_sim_time" value="true" />
   
   
@@ -25,8 +24,7 @@
   </include> -->
 
   <!-- Load robot description -->
-  <include file="$(find husky_description)/launch/description.launch" >
-  </include>
+  <param name="robot_description" command="$(find xacro)/xacro '$(find husky_custom_description)/urdf/custom_description_ouster_gps.urdf.xacro'" />
 
   <!-- Load controller configuration -->
   <rosparam command="load" file="$(find husky_control)/config/control.yaml" />
@@ -66,11 +64,18 @@
     <!-- /robot_pose: UTM 절대좌표 pose with covariance -->
     <!-- TF: utm → camera_init (heading 보정 적용) -->
   </node>
-  <node pkg="tf2_ros" type="static_transform_publisher" name="camera_init_to_base" 
-      args="0 0 0 0 0 0 base_link camera_init" />
-      
+
+
+  <!-- Ouster 센서와 base_link 연결 -->
+  <node pkg="tf2_ros" type="static_transform_publisher" name="base_to_camera_init" 
+    args="0.3 0 0.51 0 0 0 1 base_link camera_init" />
+
+
+
   <!-- ===== 포인트 클라우드 처리 파이프라인 ===== -->
-  <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="screen" />  
+  <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="screen" />
+
+  
   <!-- Ouster 데이터 다운샘플링을 위한 VoxelGrid 필터 -->
   <node pkg="nodelet" type="nodelet" name="voxel_grid" args="load pcl/VoxelGrid pcl_manager" output="screen">
     <remap from="~input" to="/ouster/points" />
