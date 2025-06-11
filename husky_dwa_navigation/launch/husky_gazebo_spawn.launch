@@ -8,7 +8,7 @@
   <!-- GPU 가속화 -->
   <env name="CUDA_VISIBLE_DEVICES" value="0"/>
   <env name="GAZEBO_GPU_RAY" value="1"/>
-  <env name="SVGA_VGPU10" value="0"/>
+  <env name="SVGA_VGPU10" value="1"/>
   
   <!-- 환경 변수 설정 -->
   <env name="HUSKY_LMS1XX_ENABLED" value="false"/>
