@@ -33,7 +33,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
   <xacro:include filename="$(find ouster_description)/urdf/OS1-32.urdf.xacro"/>
   <xacro:OS1-32
     parent="top_chassis_link"
-    name="os1"
+    name="ouster"
     topic_points="/ouster/points"
     topic_imu="/ouster/imu"
     hz="10"

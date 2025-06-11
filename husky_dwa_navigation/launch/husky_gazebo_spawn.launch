@@ -31,9 +31,5 @@
   <!-- 로봇 스폰 -->
   <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model"
         output="screen"
-        args="-urdf -model husky -param robot_description -z 1" /> 
-
-  <!-- Robot State Publisher 실행 -->
-  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
-  
+        args="-urdf -model husky -param robot_description -z 1" />   
 </launch>
