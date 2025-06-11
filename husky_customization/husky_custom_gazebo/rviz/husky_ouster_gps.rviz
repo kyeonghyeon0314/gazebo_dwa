@@ -350,16 +350,6 @@ Visualization Manager:
       Topic: /move_base/current_goal
       Unreliable: false
       Value: true
-    - Alpha: 1
-      Class: rviz_plugin_tutorials/Imu
-      Color: 204; 51; 204
-      Enabled: false
-      History Length: 1
-      Name: Imu
-      Queue Size: 10
-      Topic: /ouster/imu
-      Unreliable: false
-      Value: false
     - Class: rviz/InteractiveMarkers
       Enable Transparency: true
       Enabled: true
@@ -548,7 +538,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 43.9434814453125
+      Distance: 10.859508514404297
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -564,9 +554,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.9797970056533813
+      Pitch: 0.4447975158691406
       Target Frame: <Fixed Frame>
-      Yaw: 2.7685959339141846
+      Yaw: 1.3835958242416382
     Saved: ~
 Window Geometry:
   Displays:

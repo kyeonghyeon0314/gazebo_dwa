@@ -98,8 +98,8 @@ class UTMHeadingCorrection:
             easting, northing, zone_num, zone_letter = utm.from_latlon(lat, lon)
             
             self.utm_origin = {
-                "easting": easting,
-                "northing": northing,
+                "easting": 0.0,
+                "northing": 0.0,
                 "lat": lat,
                 "lon": lon
             }
@@ -775,58 +775,40 @@ class UTMHeadingCorrection:
         current_time = rospy.Time.now()
         transforms = []
         
-        # ✅ utm → camera_init (직접 연결)
+        utm_to_base = TransformStamped()
+        utm_to_base.header.stamp = current_time
+        utm_to_base.header.frame_id = "utm"
+        utm_to_base.child_frame_id = "base_link"
+    
+        # 현재 로봇의 UTM 위치 사용
+        utm_to_base.transform.translation.x = self.current_pose_utm["x"]
+        utm_to_base.transform.translation.y = self.current_pose_utm["y"]
+        utm_to_base.transform.translation.z = self.current_pose_utm["z"]
+        utm_to_base.transform.rotation.x = self.current_pose_utm["qx"]
+        utm_to_base.transform.rotation.y = self.current_pose_utm["qy"]
+        utm_to_base.transform.rotation.z = self.current_pose_utm["qz"]
+        utm_to_base.transform.rotation.w = self.current_pose_utm["qw"]
+        
+        transforms.append(utm_to_base)
+    
+        # 🔥 추가: utm → camera_init (FasterLIO 호환성)
         utm_to_camera = TransformStamped()
         utm_to_camera.header.stamp = current_time
-        utm_to_camera.header.frame_id = "utm"          # UTM 절대좌표계
-        utm_to_camera.child_frame_id = "camera_init"   # FasterLIO
-        
-        # FasterLIO 원점을 UTM 절대좌표에 매핑
-        if self.utm_origin and self.fasterlio_origin:
-            utm_to_camera.transform.translation.x = (
-                self.utm_origin["easting"] - self.fasterlio_origin["x"]
-            )
-            utm_to_camera.transform.translation.y = (
-                self.utm_origin["northing"] - self.fasterlio_origin["y"]
-            )
-            utm_to_camera.transform.translation.z = 0.0
-        
-        # Heading 보정 적용
-        if self.correction_system["initial_alignment_done"]:
-            correction_yaw = self.correction_system["heading_correction"]
-            utm_to_camera.transform.rotation.z = math.sin(correction_yaw / 2.0)
-            utm_to_camera.transform.rotation.w = math.cos(correction_yaw / 2.0)
-        else:
-            utm_to_camera.transform.rotation.w = 1.0
-        
-        transforms.append(utm_to_camera)
-        
-        # 🔗 body → base_link (ROS 표준 호환성)
-        # body_to_base = TransformStamped()
-        # body_to_base.header.stamp = current_time
-        # body_to_base.header.frame_id = "body"
-        # body_to_base.child_frame_id = "base_link"
-        # body_to_base.transform.rotation.w = 1.0
-        
-        # transforms.append(body_to_base)
-
-        # 🔥 NEW: camera_init → base_link 직접 연결 (body 건너뛰기)
-        camera_to_base = TransformStamped()
-        camera_to_base.header.stamp = current_time
-        camera_to_base.header.frame_id = "camera_init"
-        camera_to_base.child_frame_id = "base_link"
+        utm_to_camera.header.frame_id = "utm"
+        utm_to_camera.child_frame_id = "camera_init"
     
-        # FasterLIO body와 base_link는 보통 동일한 위치
-        camera_to_base.transform.translation.x = 0.0
-        camera_to_base.transform.translation.y = 0.0
-        camera_to_base.transform.translation.z = 0.0
-        camera_to_base.transform.rotation.x = 0.0
-        camera_to_base.transform.rotation.y = 0.0
-        camera_to_base.transform.rotation.z = 0.0
-        camera_to_base.transform.rotation.w = 1.0
-
-        transforms.append(camera_to_base)
+        if self.utm_origin and self.fasterlio_origin:
+            # FasterLIO 현재 위치를 UTM으로 변환
+            rel_x = self.current_pose_utm["x"] - self.utm_origin["easting"]
+            rel_y = self.current_pose_utm["y"] - self.utm_origin["northing"]
         
+            utm_to_camera.transform.translation.x = rel_x + self.fasterlio_origin["x"]
+            utm_to_camera.transform.translation.y = rel_y + self.fasterlio_origin["y"]
+            utm_to_camera.transform.translation.z = 0.0
+    
+        utm_to_camera.transform.rotation.w = 1.0
+        transforms.append(utm_to_camera)
+    
         # 모든 TF 발행
         self.tf_broadcaster.sendTransform(transforms)
     
