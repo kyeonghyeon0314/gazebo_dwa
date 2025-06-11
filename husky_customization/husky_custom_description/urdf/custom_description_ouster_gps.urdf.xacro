@@ -34,8 +34,8 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
   <xacro:OS1-32
     parent="top_chassis_link"
     name="os1"
-    topic_points="/os1/points"
-    topic_imu="/os1/imu"
+    topic_points="/ouster/points"
+    topic_imu="/ouster/imu"
     hz="10"
     lasers="32"
     samples="512"

@@ -1,12 +1,44 @@
 <?xml version="1.0"?>
 <launch>
-  <!-- 가제보 환경과 휴스키 로봇 실행 -->
-  <include file="$(find husky_custom_gazebo)/launch/husky_ouster_gps.launch"/>
+  <!-- ===== 로봇 제어, 네비게이션, localization 및 모니터링 담당 ===== -->
+  <!-- 환경 독립적: 시뮬레이션과 실제 환경에서 동일하게 사용 -->
+  
+  <!-- Husky 제어 시스템 -->
+  <include file="$(find husky_control)/launch/control.launch" />
 
-  <!-- 포인트 클라우드 처리 파이프라인 -->
+  <!-- ===== Faster-LIO Localization ===== -->
+  <arg name="rviz_faster_lio" default="false" />
+  
+  <!-- Faster-LIO 설정 로드 -->
+  <rosparam command="load" file="$(find faster_lio)/config/ouster32.yaml" />
+  
+  <!-- Faster-LIO 매핑 파라미터 -->
+  <param name="feature_extract_enable" type="bool" value="0"/>
+  <param name="point_filter_num_" type="int" value="4"/>
+  <param name="max_iteration" type="int" value="3" />
+  <param name="filter_size_surf" type="double" value="0.5" />
+  <param name="filter_size_map" type="double" value="0.5" />
+  <param name="cube_side_length" type="double" value="1000" />
+  <param name="runtime_pos_log_enable" type="bool" value="0" />
+  
+  <!-- Faster-LIO 실행 -->
+  <node pkg="faster_lio" type="run_mapping_online" name="laserMapping" output="screen" />
+
+  <!-- Faster-LIO RViz (선택적) -->
+  <group if="$(arg rviz_faster_lio)">
+    <node launch-prefix="nice" pkg="rviz" type="rviz" name="faster_lio_rviz" 
+          args="-d $(find faster_lio)/rviz_cfg/loam_livox.rviz" />
+  </group>
+
+  <!-- ===== GPS Heading 보정 (path_visualizer.py) ===== -->
+  <node pkg="husky_dwa_navigation" type="path_visualizer.py" name="path_visualizer" output="screen">
+    <param name="use_sim_time" value="true" />
+  </node>
+
+  <!-- ===== 포인트 클라우드 처리 파이프라인 ===== -->
   <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="screen" />
   
-  <!-- 벨로다인 데이터 다운샘플링을 위한 VoxelGrid 필터 -->
+  <!-- Ouster 데이터 다운샘플링을 위한 VoxelGrid 필터 -->
   <node pkg="nodelet" type="nodelet" name="voxel_grid" args="load pcl/VoxelGrid pcl_manager" output="screen">
     <remap from="~input" to="/os1/points" />
     <remap from="~output" to="/points_filtered" />
@@ -15,18 +47,19 @@
     <param name="filter_limit_min" value="-0.5" />
     <param name="filter_limit_max" value="2.0" />
   </node>
-  <!-- 추가: PointCloud2를 LaserScan으로 변환 -->
+  
+  <!-- PointCloud2를 LaserScan으로 변환 -->
   <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan">
     <remap from="cloud_in" to="/points_filtered"/>
     <remap from="scan" to="/scan"/>
     <param name="angle_min" value="-3.14159"/>
     <param name="angle_max" value="3.14159"/>
-    <param name="min_height" value="-2"/>
+    <param name="min_height" value="-0.7"/>
     <param name="max_height" value="2"/>
     <param name="angle_increment" value="0.01"/>
   </node>
 
-  <!-- Move Base 네비게이션 스택 사용 -->
+  <!-- ===== DWA Navigation (Move Base) ===== -->
   <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
     <rosparam file="$(find husky_dwa_navigation)/config/costmap_common_params.yaml" command="load" ns="global_costmap" />
     <rosparam file="$(find husky_dwa_navigation)/config/costmap_common_params.yaml" command="load" ns="local_costmap" />
@@ -47,7 +80,7 @@
     <!-- 로컬 플래너 설정 -->
     <param name="base_local_planner" value="dwa_local_planner/DWAPlannerROS" />
 
-    <!-- 기본 글로벌 플래너 설정 -->
+    <!-- 글로벌 플래너 설정 -->
     <param name="base_global_planner" value="global_planner/GlobalPlanner" />
 
     <!-- 플래너 빈도 설정 -->
@@ -62,8 +95,7 @@
     <param name="GlobalPlanner/old_navfn_behavior" value="false" />
   </node>
 
-
-  <!-- 글로벌 플래너 전환 모니터링 - 직접 husky_dwa_navigation 패키지의 스크립트 실행 -->
+  <!-- ===== Navigation Manager ===== -->
   <node pkg="husky_dwa_navigation" type="navigation_manager_node.py" name="navigation_manager" output="screen">
     <param name="global_costmap_topic" value="/move_base/global_costmap/costmap" />
     <param name="robot_base_frame" value="base_link" />
@@ -73,5 +105,19 @@
     <param name="check_frequency" value="5.0" />
     <param name="border_tolerance" value="1.0" />
   </node>
+
+  <!-- ===== RViz 시각화 (로봇 제어 및 모니터링) ===== -->
+  <!-- 메인 RViz - 로봇 상태 모니터링 및 제어 -->
+  <node name="rviz" pkg="rviz" type="rviz" 
+        args="-d $(find husky_custom_gazebo)/rviz/husky_ouster_gps.rviz" 
+        output="screen" />
+
+  <!-- Navigation 전용 RViz (선택적) -->
+  <arg name="separate_nav_rviz" default="false" />
+  <group if="$(arg separate_nav_rviz)">
+    <node name="navigation_rviz" pkg="rviz" type="rviz" 
+          args="-d $(find husky_dwa_navigation)/rviz/navigation.rviz" 
+          required="false" />
+  </group>
   
 </launch>
