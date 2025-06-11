@@ -21,6 +21,7 @@ Panels:
   - Class: rviz/Views
     Expanded:
       - /Current View1
+      - /Current View1/Focal Point1
     Name: Views
     Splitter Ratio: 0.5
   - Class: rviz/Time
@@ -470,17 +471,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: -10.092609405517578
-        Y: 5.015684604644775
-        Z: 2.0521492958068848
+        X: 0
+        Y: 0
+        Z: 2.0520999431610107
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.105202078819275
+      Pitch: 0.8347969651222229
       Target Frame: <Fixed Frame>
-      Yaw: 3.258594036102295
+      Yaw: 1.1385951042175293
     Saved: ~
 Window Geometry:
   Displays:

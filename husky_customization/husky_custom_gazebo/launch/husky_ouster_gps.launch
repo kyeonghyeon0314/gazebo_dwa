@@ -55,12 +55,17 @@
   <rosparam param="wheel_radius_multiplier" ns="husky_velocity_controller" subst_value="True">
         $(optenv HUSKY_WHEEL_MULTIPLIER 1.0)
   </rosparam>
+
+  
   <!-- Start EKF for localization -->
   <group if="$(arg enable_ekf)" >
     <node pkg="robot_localization" type="ekf_localization_node" name="ekf_localization">
       <rosparam command="load" file="$(find husky_dwa_navigation)/config/localization_ouster.yaml" />
     </node>
   </group>
+
+
+
   <node pkg="interactive_marker_twist_server" type="marker_server" name="twist_marker_server" output="screen">
     <param name="link_name" value="base_link" />
   </node>

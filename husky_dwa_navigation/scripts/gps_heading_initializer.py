@@ -2,17 +2,17 @@
 # -*- coding: utf-8 -*-
 
 """
-GPS 기반 초기 Heading 설정 노드 (Python 3.8 호환 버전)
-1. Space바를 누르기 전까지는 동작하지 않음
-2. 로봇 전방 3m에 임시 목적지 생성
-3. 이동 경로를 통해 초기 heading 설정
+최종 GPS 기반 Heading 설정 노드
+1. GPS 이동 감지 시 자동으로 heading 계산
+2. EKF localization에 확실히 적용
+3. 완료 후 Ctrl+C와 동일한 방식으로 자동 종료
+4. 여러 방법으로 initial pose 설정 시도
 """
 
 import rospy
 import tf2_ros
-import tf2_geometry_msgs
-from tf.transformations import quaternion_from_euler, euler_from_quaternion
-from geometry_msgs.msg import PoseWithCovarianceStamped, TransformStamped, PoseStamped, Twist
+from tf.transformations import quaternion_from_euler
+from geometry_msgs.msg import PoseWithCovarianceStamped, TransformStamped
 from sensor_msgs.msg import NavSatFix
 from geographic_msgs.msg import GeoPoseStamped
 from std_msgs.msg import String, Bool
@@ -20,22 +20,18 @@ from geodesy import utm
 import numpy as np
 import threading
 from collections import deque
-import termios
-import sys
-import tty
-import select
+import os
+import signal
 
-class GPSHeadingInitializer:
+class FinalGPSHeadingInitializer:
     def __init__(self):
-        rospy.init_node('gps_heading_initializer', anonymous=True)
+        rospy.init_node('final_gps_heading_initializer', anonymous=True)
         
         # 파라미터 설정
         self.fixed_frame = rospy.get_param('~fixed_frame', 'utm')
         self.robot_frame = rospy.get_param('~robot_frame', 'base_link')
         self.gps_frame = rospy.get_param('~gps_frame', 'gps_link')
-        self.min_speed_threshold = rospy.get_param('~min_speed_threshold', 0.2)  # m/s
-        self.heading_samples = rospy.get_param('~heading_samples', 15)
-        self.forward_distance = rospy.get_param('~forward_distance', 3.0)  # 전방 3m
+        self.heading_samples = rospy.get_param('~heading_samples', 30)
         self.utm_zone = rospy.get_param('~utm_zone', None)
         self.utm_band = rospy.get_param('~utm_band', None)
         
@@ -44,135 +40,51 @@ class GPSHeadingInitializer:
         self.gps_data_buffer = deque(maxlen=self.heading_samples)
         self.initial_position_set = False
         self.heading_initialized = False
-        self.space_pressed = False
-        self.calibration_active = False
-        self.forward_goal_sent = False
+        self.heading_applied = False
         self.utm_origin = None
-        self.initial_robot_pose = None
+        
+        # 초기 GPS 데이터 저장 (이동 거리 계산용)
+        self.first_gps_data = None
+        self.current_gps_data = None
+        
+        # 로그 출력 제어 변수
+        self.last_log_time = rospy.Time.now()
+        self.last_progress_log_time = rospy.Time.now()
+        self.log_interval = 5.0  # 5초마다 좌표 비교 로그 출력
+        self.progress_log_interval = 10.0  # 10초마다 진행 상황 로그 출력
+        
+        # 자동 캘리브레이션 관련 변수
+        self.auto_calibration_started = False
+        self.start_time = None
+        self.min_movement_distance = 0.5  # 최소 이동거리
+        self.stability_check_time = 8.0   # 8초 동안 데이터 수집 후 계산
+        self.min_samples_required = 10    # 최소 필요 샘플 수
+        
+        # Initial pose 적용 관련 변수
+        self.calculated_heading = None
         
         # TF 관련
         self.tf_broadcaster = tf2_ros.TransformBroadcaster()
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
         
-        # Publishers
+        # Publishers - 다양한 토픽에 발행
         self.initial_pose_pub = rospy.Publisher('/initialpose', PoseWithCovarianceStamped, queue_size=1)
+        self.initial_pose_pub_ekf = rospy.Publisher('/set_pose', PoseWithCovarianceStamped, queue_size=1)
         self.utm_pose_pub = rospy.Publisher('/utm_pose', GeoPoseStamped, queue_size=1)
-        self.calibration_goal_pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=1)
         self.status_pub = rospy.Publisher('/gps_heading_status', String, queue_size=1)
-        self.cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=1)
+        self.heading_applied_pub = rospy.Publisher('/heading_applied', Bool, queue_size=1)
         
         # Subscribers
         self.gps_sub = rospy.Subscriber('/gps/fix', NavSatFix, self.gps_callback)
-        self.space_sub = rospy.Subscriber('/space_key_pressed', Bool, self.space_callback)
         
-        # 키보드 입력 처리를 위한 스레드
-        self.keyboard_thread = threading.Thread(target=self.keyboard_listener)
-        self.keyboard_thread.daemon = True
-        self.keyboard_thread.start()
+        rospy.loginfo("=== 최종 GPS Heading Initializer 시작 ===")
+        rospy.loginfo("📍 UTM 좌표 차이 로깅 활성화 (5초당 1번)")
+        rospy.loginfo("🤖 이동 감지 시 자동으로 heading 계산을 시작합니다")
+        rospy.loginfo("🎯 완료 후 노드가 자동으로 종료됩니다 (Ctrl+C와 동일)")
         
-        rospy.loginfo("=== GPS Heading Initializer 시작===")
-        rospy.loginfo("Space바를 눌러 초기 heading 캘리브레이션을 시작하세요.")
-        rospy.loginfo(f"전방 목표 거리: {self.forward_distance}m")
-        rospy.loginfo(f"최소 이동 속도: {self.min_speed_threshold} m/s")
-        
-    def keyboard_listener(self):
-        """키보드 입력 감지 (별도 스레드)"""
-        try:
-            # 터미널 설정 저장
-            old_settings = termios.tcgetattr(sys.stdin)
-            tty.setraw(sys.stdin.fileno())
-            
-            while not rospy.is_shutdown():
-                if select.select([sys.stdin], [], [], 0.1)[0]:
-                    key = sys.stdin.read(1)
-                    if key == ' ':  # Space바
-                        self.handle_space_press()
-                    elif key == '\x03':  # Ctrl+C
-                        break
-                        
-        except Exception as e:
-            rospy.logwarn(f"키보드 입력 처리 오류: {e}")
-        finally:
-            # 터미널 설정 복원
-            try:
-                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
-            except Exception:
-                pass
-    
-    def handle_space_press(self):
-        """Space바 입력 처리"""
-        if not self.space_pressed and not self.heading_initialized:
-            self.space_pressed = True
-            rospy.loginfo("⚡ Space바 감지! GPS 기반 heading 캘리브레이션을 시작합니다...")
-            self.start_calibration()
-        elif self.heading_initialized:
-            rospy.loginfo("📍 Heading이 이미 초기화되었습니다.")
-        else:
-            rospy.loginfo("🔄 캘리브레이션이 이미 진행 중입니다...")
-    
-    def space_callback(self, msg):
-        """Space 키 토픽 콜백 (대안적 입력 방법)"""
-        if msg.data:
-            self.handle_space_press()
-    
-    def start_calibration(self):
-        """캘리브레이션 프로세스 시작"""
-        if not self.initial_position_set:
-            rospy.logwarn("⚠️  GPS 신호를 기다리는 중...")
-            return
-            
-        self.calibration_active = True
-        self.publish_status("캘리브레이션 시작: 전방 목표점 생성 중...")
-        
-        # 현재 로봇 위치 가져오기
-        try:
-            transform = self.tf_buffer.lookup_transform(
-                self.fixed_frame, self.robot_frame, 
-                rospy.Time(), rospy.Duration(1.0))
-            
-            current_x = transform.transform.translation.x
-            current_y = transform.transform.translation.y
-            
-            # 현재 방향 가져오기 (추정값 또는 0)
-            orientation = transform.transform.rotation
-            _, _, current_yaw = euler_from_quaternion([
-                orientation.x, orientation.y, orientation.z, orientation.w])
-            
-        except Exception as e:
-            rospy.logwarn(f"현재 위치 가져오기 실패, GPS 위치 사용: {e}")
-            if len(self.gps_data_buffer) > 0:
-                latest_gps = self.gps_data_buffer[-1]
-                current_x = latest_gps['x']
-                current_y = latest_gps['y']
-                current_yaw = 0.0  # 초기 방향 추정값
-            else:
-                rospy.logerr("❌ GPS 데이터가 없어 캘리브레이션을 시작할 수 없습니다.")
-                return
-        
-        # 전방 3m 목표점 생성
-        forward_x = current_x + self.forward_distance * np.cos(current_yaw)
-        forward_y = current_y + self.forward_distance * np.sin(current_yaw)
-        
-        self.send_forward_goal(forward_x, forward_y)
-        self.initial_robot_pose = {'x': current_x, 'y': current_y, 'yaw': current_yaw}
-        
-        rospy.loginfo(f"🎯 전방 목표점 설정: ({forward_x:.2f}, {forward_y:.2f})")
-        rospy.loginfo("🚶 로봇이 이동하여 heading을 측정합니다...")
-        
-    def send_forward_goal(self, x, y):
-        """전방 목표점 발송"""
-        goal = PoseStamped()
-        goal.header.stamp = rospy.Time.now()
-        goal.header.frame_id = self.fixed_frame
-        goal.pose.position.x = x
-        goal.pose.position.y = y
-        goal.pose.position.z = 0.0
-        goal.pose.orientation.w = 1.0
-        
-        self.calibration_goal_pub.publish(goal)
-        self.forward_goal_sent = True
-        self.publish_status("전방 목표점으로 이동 중...")
+        # 파라미터 정보 출력
+        rospy.loginfo(f"최소 이동 거리: {self.min_movement_distance} m")
+        rospy.loginfo(f"GPS 샘플 수: {self.heading_samples}")
+        rospy.loginfo(f"안정성 체크 시간: {self.stability_check_time} 초")
         
     def gps_callback(self, gps_msg):
         """GPS 데이터 콜백"""
@@ -194,8 +106,24 @@ class GPSHeadingInitializer:
                 if not self.initial_position_set:
                     self.utm_origin = utm_point
                     self.initial_position_set = True
+                    self.start_time = rospy.Time.now()
                     self.publish_utm_to_map_transform(utm_point)
                     rospy.loginfo(f"📍 UTM 원점 설정: {utm_point.easting:.2f}, {utm_point.northing:.2f}")
+                    rospy.loginfo("🚶 로봇을 움직여주세요. 자동으로 이동을 감지합니다...")
+                    
+                    # 첫 번째 GPS 데이터 저장
+                    self.first_gps_data = {
+                        'easting': utm_point.easting,
+                        'northing': utm_point.northing,
+                        'timestamp': gps_msg.header.stamp
+                    }
+                
+                # 현재 GPS 데이터 업데이트
+                self.current_gps_data = {
+                    'easting': utm_point.easting,
+                    'northing': utm_point.northing,
+                    'timestamp': gps_msg.header.stamp
+                }
                 
                 # GPS 데이터를 버퍼에 저장 (상대 좌표)
                 relative_x = utm_point.easting - self.utm_origin.easting
@@ -210,9 +138,12 @@ class GPSHeadingInitializer:
                 
                 self.gps_data_buffer.append(gps_data)
                 
-                # 캘리브레이션이 활성화된 경우에만 heading 계산
-                if self.calibration_active and not self.heading_initialized:
-                    self.calculate_and_set_heading()
+                # 좌표 비교 로그 출력 (5초마다)
+                self.log_coordinate_comparison(utm_point)
+                
+                # 자동 캘리브레이션 실행
+                if not self.heading_initialized and self.initial_position_set:
+                    self.auto_calculate_heading()
                 
                 # UTM pose 발행
                 self.publish_utm_pose(utm_point, gps_msg.header.stamp)
@@ -220,42 +151,134 @@ class GPSHeadingInitializer:
             except Exception as e:
                 rospy.logerr(f"GPS 콜백 처리 오류: {e}")
     
-    def calculate_and_set_heading(self):
-        """GPS 이동 데이터를 통해 heading 계산 및 설정"""
-        if len(self.gps_data_buffer) < 5:  # 최소 5개 샘플 필요
+    def log_coordinate_comparison(self, utm_point):
+        """좌표 비교 로그 출력 (5초마다)"""
+        current_time = rospy.Time.now()
+        if (current_time - self.last_log_time).to_sec() >= self.log_interval:
+            self.last_log_time = current_time
+            
+            # 시뮬레이션 좌표 가져오기 (기본값 사용)
+            sim_x = 166026.468
+            sim_y = 0.930
+            
+            diff_x = utm_point.easting - sim_x
+            diff_y = utm_point.northing - sim_y
+            distance_diff = np.sqrt(diff_x*diff_x + diff_y*diff_y)
+            
+            rospy.loginfo("============================================================")
+            rospy.loginfo("📊 GPS vs 시뮬레이션 UTM 좌표 비교")
+            rospy.loginfo(f"🛰️  GPS UTM:    E={utm_point.easting:.3f}, N={utm_point.northing:.3f}")
+            rospy.loginfo(f"🎮 시뮬레이션:  E={sim_x:.3f}, N={sim_y:.3f}")
+            rospy.loginfo(f"📏 차이:       ΔE={diff_x:.3f}m, ΔN={diff_y:.3f}m")
+            rospy.loginfo(f"📐 거리 차이:   {distance_diff:.3f}m")
+            rospy.loginfo("============================================================")
+    
+    def auto_calculate_heading(self):
+        """자동으로 이동 감지 및 heading 계산"""
+        # 충분한 데이터가 모일 때까지 대기
+        if len(self.gps_data_buffer) < self.min_samples_required:
             return
             
-        # 이동 거리 계산
-        recent_data = list(self.gps_data_buffer)[-5:]  # 최근 5개 데이터
-        start_pos = recent_data[0]
-        end_pos = recent_data[-1]
+        # 시작 시간으로부터 일정 시간 경과 확인
+        elapsed_time = (rospy.Time.now() - self.start_time).to_sec()
         
-        dx = end_pos['x'] - start_pos['x']
-        dy = end_pos['y'] - start_pos['y']
-        distance = np.sqrt(dx*dx + dy*dy)
-        
-        # 충분히 이동했는지 확인
-        if distance < self.min_speed_threshold * 2:  # 2초간 최소 이동 거리
+        # 첫 번째 GPS 데이터와 현재 GPS 데이터 비교하여 총 이동 거리 계산
+        if self.first_gps_data is None or self.current_gps_data is None:
             return
+            
+        dx = self.current_gps_data['easting'] - self.first_gps_data['easting']
+        dy = self.current_gps_data['northing'] - self.first_gps_data['northing']
+        total_distance = np.sqrt(dx*dx + dy*dy)
         
-        # Heading 계산
-        calculated_heading = np.arctan2(dy, dx)
+        # 진행 상황 로그 출력 (10초마다만)
+        current_time = rospy.Time.now()
+        if not self.auto_calibration_started and (current_time - self.last_progress_log_time).to_sec() >= self.progress_log_interval:
+            self.last_progress_log_time = current_time
+            rospy.loginfo(f"🔍 현재 총 이동 거리: {total_distance:.3f}m (필요: {self.min_movement_distance}m)")
+            rospy.loginfo(f"⏰ 경과 시간: {elapsed_time:.1f}초")
+            rospy.loginfo(f"📊 GPS 샘플: {len(self.gps_data_buffer)}/{self.heading_samples}")
         
-        # Initial pose 설정
-        self.set_initial_pose_with_heading(calculated_heading)
+        # 자동 캘리브레이션 시작 조건 확인
+        if not self.auto_calibration_started:
+            # 최소 이동 거리와 시간 조건 확인
+            if total_distance >= self.min_movement_distance and elapsed_time >= self.stability_check_time:
+                self.auto_calibration_started = True
+                rospy.loginfo("🚀 충분한 이동 감지! 자동 캘리브레이션 시작")
+                rospy.loginfo(f"📏 감지된 총 이동 거리: {total_distance:.3f}m")
+                rospy.loginfo(f"📐 이동 방향: ΔE={dx:.3f}m, ΔN={dy:.3f}m")
+                self.calculate_and_set_heading(total_distance, dx, dy)
+            return
+    
+    def calculate_and_set_heading(self, distance, dx, dy):
+        """이동 데이터를 통해 heading 계산 및 설정"""
+        # Heading 계산 (atan2를 사용하여 방향 계산)
+        self.calculated_heading = np.arctan2(dy, dx)
         
-        rospy.loginfo(f"🧭 GPS 기반 Heading 계산 완료: {np.degrees(calculated_heading):.1f}도")
-        rospy.loginfo(f"📏 이동 거리: {distance:.2f}m")
+        rospy.loginfo("🎉 ============================================")
+        rospy.loginfo("🧭 GPS 기반 Heading 계산 완료!")
+        rospy.loginfo(f"📐 계산된 Heading: {np.degrees(self.calculated_heading):.1f}도")
+        rospy.loginfo(f"📏 총 이동 거리: {distance:.2f}m")
+        rospy.loginfo(f"📊 사용된 GPS 샘플: {len(self.gps_data_buffer)}개")
+        rospy.loginfo(f"🧮 이동 벡터: ΔE={dx:.3f}m, ΔN={dy:.3f}m")
+        rospy.loginfo("🎉 ============================================")
         
         self.heading_initialized = True
-        self.calibration_active = False
-        self.publish_status(f"Heading 캘리브레이션 완료: {np.degrees(calculated_heading):.1f}도")
-    
-    def set_initial_pose_with_heading(self, heading):
-        """계산된 heading으로 initial pose 설정"""
+        
+        # Initial pose 설정 시도
+        self.apply_initial_pose_multiple_ways()
+        
+        rospy.loginfo("✅ Heading 설정이 완료되었습니다.")
+        rospy.loginfo("🔄 3초 후 자동으로 종료됩니다...")
+        
+        # 마지막 상태 정보 발행
+        rospy.sleep(1.0)
+        self.publish_status("Heading 캘리브레이션 완료 - 노드 종료 중")
+        rospy.sleep(2.0)
+        
+        rospy.loginfo("👋 GPS Heading Initializer 종료")
+        
+        # Ctrl+C와 동일한 방식으로 자동 종료 (SIGINT 신호 전송)
+        os.kill(os.getpid(), signal.SIGINT)
+        
+    def apply_initial_pose_multiple_ways(self):
+        """다양한 방법으로 initial pose 적용"""
+        if self.calculated_heading is None:
+            return
+            
+        rospy.loginfo("🔧 다양한 방법으로 Initial Pose 적용을 시도합니다...")
+        
+        # 방법 1: /initialpose 토픽 (RViz, AMCL용)
+        self.publish_initial_pose_to_topic('/initialpose', self.initial_pose_pub)
+        
+        # 방법 2: /set_pose 토픽 (EKF용)
+        self.publish_initial_pose_to_topic('/set_pose', self.initial_pose_pub_ekf)
+        
+        # 방법 3: utm frame과 map frame 둘 다 시도
+        self.publish_initial_pose_multiple_frames()
+        
+        rospy.loginfo("🔧 Initial Pose 적용 완료. Localization이 업데이트될 때까지 기다려주세요.")
+        
+    def publish_initial_pose_to_topic(self, topic_name, publisher):
+        """특정 토픽에 initial pose 발행"""
+        initial_pose = self.create_initial_pose_message(self.fixed_frame)
+        publisher.publish(initial_pose)
+        rospy.loginfo(f"📍 Initial pose published to {topic_name}")
+        
+    def publish_initial_pose_multiple_frames(self):
+        """여러 frame에 대해 initial pose 발행"""
+        frames_to_try = ['utm', 'map', 'odom']
+        
+        for frame in frames_to_try:
+            initial_pose = self.create_initial_pose_message(frame)
+            self.initial_pose_pub.publish(initial_pose)
+            rospy.sleep(0.1)  # 짧은 지연
+            rospy.loginfo(f"📍 Initial pose published with frame: {frame}")
+            
+    def create_initial_pose_message(self, frame_id):
+        """Initial pose 메시지 생성"""
         initial_pose = PoseWithCovarianceStamped()
         initial_pose.header.stamp = rospy.Time.now()
-        initial_pose.header.frame_id = self.fixed_frame
+        initial_pose.header.frame_id = frame_id
         
         # 현재 GPS 기반 위치 사용
         if len(self.gps_data_buffer) > 0:
@@ -269,7 +292,7 @@ class GPSHeadingInitializer:
         initial_pose.pose.pose.position.z = 0.0
         
         # 계산된 heading으로 orientation 설정
-        quat = quaternion_from_euler(0, 0, heading)
+        quat = quaternion_from_euler(0, 0, self.calculated_heading)
         initial_pose.pose.pose.orientation.x = quat[0]
         initial_pose.pose.pose.orientation.y = quat[1]
         initial_pose.pose.pose.orientation.z = quat[2]
@@ -278,12 +301,11 @@ class GPSHeadingInitializer:
         # Covariance 설정 (GPS 기반이므로 위치는 높은 신뢰도, heading은 중간 신뢰도)
         covariance = [0.0] * 36
         covariance[0] = 0.25   # x
-        covariance[7] = 0.25   # y
+        covariance[7] = 0.25   # y  
         covariance[35] = 0.1   # yaw (계산된 heading)
         initial_pose.pose.covariance = covariance
         
-        self.initial_pose_pub.publish(initial_pose)
-        rospy.loginfo("📍 Initial pose with GPS heading published")
+        return initial_pose
     
     def publish_utm_to_map_transform(self, utm_point):
         """UTM에서 map으로의 transform 발행"""
@@ -334,18 +356,27 @@ class GPSHeadingInitializer:
                 self.publish_utm_to_map_transform(self.utm_origin)
             
             # 상태 메시지 주기적 발행
-            if not self.space_pressed and not self.heading_initialized:
-                self.publish_status("Space바를 눌러 heading 캘리브레이션을 시작하세요.")
-            elif self.calibration_active:
-                self.publish_status("캘리브레이션 진행 중...")
+            if not self.heading_initialized and self.initial_position_set:
+                if not self.auto_calibration_started:
+                    self.publish_status("이동 감지 대기 중... 로봇을 움직여주세요")
+                else:
+                    self.publish_status("Heading 계산 중...")
             elif self.heading_initialized:
-                self.publish_status("Heading 캘리브레이션 완료")
+                self.publish_status(f"Heading 캘리브레이션 완료: {np.degrees(self.calculated_heading):.1f}도")
+                # Heading 적용 상태 발행
+                applied_msg = Bool()
+                applied_msg.data = True
+                self.heading_applied_pub.publish(applied_msg)
+            elif not self.initial_position_set:
+                self.publish_status("GPS 신호 대기 중...")
             
             rate.sleep()
 
 if __name__ == '__main__':
     try:
-        gps_heading_init = GPSHeadingInitializer()
+        rospy.loginfo("최종 GPS Heading Initializer 시작")
+        gps_heading_init = FinalGPSHeadingInitializer()
         gps_heading_init.run()
     except rospy.ROSInterruptException:
+        rospy.loginfo("GPS Heading Initializer 종료")
         pass

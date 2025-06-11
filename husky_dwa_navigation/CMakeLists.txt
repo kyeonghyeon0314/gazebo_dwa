@@ -53,7 +53,6 @@ catkin_install_python(
   PROGRAMS 
     scripts/gps_heading_initializer.py
     scripts/utm_localization_node.py
-    scripts/space_key_publisher.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
@@ -70,6 +69,5 @@ install(
   PROGRAMS
     scripts/gps_heading_initializer.py
     scripts/utm_localization_node.py
-    scripts/space_key_publisher.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

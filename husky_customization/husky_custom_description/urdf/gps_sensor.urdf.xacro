@@ -34,6 +34,8 @@
       <!-- Husky 뒤쪽 상단에 GPS 센서 위치 -->
       <origin xyz="-0.3 0 0.3" rpy="0 0 0"/>
     </joint>
+
+    
   
   </xacro:macro>
 </robot>

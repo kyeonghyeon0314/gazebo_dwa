@@ -38,24 +38,59 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
   <xacro:husky_robot_gazebo />
   
-  <!-- 월드 파일 기준 GPS 플러그인 (위도 0°, 경도 0°) -->
-  <gazebo reference="gps_link">
-    <plugin name="gps_controller" filename="libhector_gazebo_ros_gps.so">
-      <alwaysOn>true</alwaysOn>
-      <updateRate>10.0</updateRate>
-      <bodyName>gps_link</bodyName>
-      <frameId>gps_link</frameId>
-      <topicName>/gps/fix</topicName>
-      <!-- 월드 파일과 동일한 GPS 좌표 (위도 0°, 경도 0°) -->
-      <referenceLatitude>0.0</referenceLatitude>
-      <referenceLongitude>0.0</referenceLongitude>
-      <referenceHeading>0</referenceHeading>
-      <referenceAltitude>0</referenceAltitude>
-      <!-- 시뮬레이션용 최소 노이즈 -->
-      <drift>0.001 0.001 0.001</drift>
-      <gaussianNoise>0.01 0.01 0.01</gaussianNoise>
-    </plugin>
-  </gazebo>
+  <!-- GPS Gazebo 플러그인 추가 (월드 좌표 기준) -->
+    <gazebo reference="gps_link">
+      <sensor name="gps_sensor" type="gps">
+        <always_on>true</always_on>
+        <update_rate>10.0</update_rate>
+        <gps>
+          <position_sensing>
+            <horizontal>
+              <noise type="gaussian">
+                <mean>0.0</mean>
+                <stddev>2.0</stddev>
+              </noise>
+            </horizontal>
+            <vertical>
+              <noise type="gaussian">
+                <mean>0.0</mean>
+                <stddev>4.0</stddev>
+              </noise>
+            </vertical>
+          </position_sensing>
+          <velocity_sensing>
+            <horizontal>
+              <noise type="gaussian">
+                <mean>0.0</mean>
+                <stddev>0.1</stddev>
+              </noise>
+            </horizontal>
+            <vertical>
+              <noise type="gaussian">
+                <mean>0.0</mean>
+                <stddev>0.1</stddev>
+              </noise>
+            </vertical>
+          </velocity_sensing>
+        </gps>
+        <plugin name="gps_controller" filename="libhector_gazebo_ros_gps.so">
+          <alwaysOn>true</alwaysOn>
+          <updateRate>10.0</updateRate>
+          <bodyName>gps_link</bodyName>
+          <topicName>/gps/fix</topicName>
+          <velocityTopicName>/gps/fix_velocity</velocityTopicName>
+          <!-- 월드 파일의 좌표계에 맞춘 참조점 (위도 0, 경도 0) -->
+          <referenceLatitude>0.0</referenceLatitude>
+          <referenceLongitude>0.0</referenceLongitude>
+          <referenceHeading>0.0</referenceHeading>
+          <referenceAltitude>0.0</referenceAltitude>
+          <drift>0.001 0.001 0.001</drift>
+          <gaussianNoise>2.0 2.0 4.0</gaussianNoise>
+          <velocityDrift>0.001 0.001 0.001</velocityDrift>
+          <velocityGaussianNoise>0.1 0.1 0.1</velocityGaussianNoise>
+        </plugin>
+      </sensor>
+    </gazebo>
 
   <xacro:include filename="$(find husky_custom_description)/urdf/custom_description_ouster_gps.urdf.xacro" />
 

@@ -6,8 +6,8 @@ global_costmap:
   publish_frequency: 2              # 발행 주기 (Hz)
   static_map: false                 # 정적 맵 사용 안함
   rolling_window: true              # 롤링 윈도우 모드
-  width: 30.0                       # 글로벌 맵 폭 (m) - 더 넓게
-  height: 30.0                      # 글로벌 맵 높이 (m)
+  width: 25.0                       # 글로벌 맵 폭 (m) - 더 넓게
+  height: 25.0                      # 글로벌 맵 높이 (m)
   resolution: 0.1                   # 해상도 (m/cell) - 로컬보다 낮은 해상도
   transform_tolerance: 0.5          # TF 변환 허용 오차 (s)
   reset_distance: 0.5               # 맵 리셋 거리 (m)
