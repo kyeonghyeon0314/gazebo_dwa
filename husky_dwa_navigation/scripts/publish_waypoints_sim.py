@@ -26,16 +26,20 @@ class WaypointNavigator:
         # Waypoints 사전 정의 (UTM 절대 좌표)
         # citysim_gazebo.world 기준 UTM 좌표
         self.waypoints_utm = [
-            {"x": 44, "y": 0},
-            {"x": 44, "y": 45},
-            {"x": -15, "y": 45},
-            {"x": -15, "y": 0},
-            {"x": -45, "y": 0},
-            {"x": -72, "y": 0},
-            {"x": -72, "y": -45},
-            {"x": -45, "y": -45},
-            {"x": -45, "y": 0},
-            {"x": 0, "y": 0}
+            {"x": 0, "y": 44},
+            {"x": 45, "y": 44},
+            {"x": 45, "y": -15},
+            {"x": 45, "y": -45},
+            {"x": 45, "y": -72},
+            {"x": 0, "y": -72},
+            {"x": 0, "y": -45},
+            {"x": 45, "y": -45},
+            {"x": 92, "y": -45},
+            {"x": 98, "y": -41},
+            {"x": 100, "y": -15},
+            # {"x": 45, "y": -15},
+            # {"x": 0, "y": -15},
+            # {"x": 0, "y": 0}
         ]
         
         # GPS 관련 변수 (검증용)
@@ -43,8 +47,8 @@ class WaypointNavigator:
         
         # 상태 변수
         self.current_waypoint_index = 0
-        self.waypoint_reached_threshold = 2.0  # 2미터 이내 도달로 판단
-        self.gps_verification_threshold = 3.0   # GPS 검증 기준 거리 (3미터
+        self.waypoint_reached_threshold = 7.0  # 2미터 이내 도달로 판단
+        self.gps_verification_threshold = 7.0   # GPS 검증 기준 거리 (3미터
         self.is_navigating = False
         self.goal_sent = False
         
@@ -160,68 +164,78 @@ class WaypointNavigator:
         self.send_current_waypoint()
     
     def send_current_waypoint(self):
-        """현재 waypoint를 move_base goal로 전송 (UTM 좌표)"""
+        """현재 waypoint를 move_base goal로 전송 (순수 UTM 절대좌표)"""
         if self.current_waypoint_index >= len(self.waypoints_utm):
             rospy.loginfo("🏁 모든 waypoints 완주!")
             self.is_navigating = False
             return
-        
+    
         current_wp = self.waypoints_utm[self.current_waypoint_index]
-        
-        # PoseStamped 메시지 생성 (UTM frame 사용)
+    
+        # ✅ 순수 UTM 절대좌표로 목표점 생성
         goal = PoseStamped()
-        goal.header.frame_id = "utm"  # UTM frame 사용
-        goal.header.stamp = rospy.Time.now()
-        
-        # UTM 좌표 직접 사용
-        goal.pose.position.x = current_wp["x"]
-        goal.pose.position.y = current_wp["y"]
+        goal.header.frame_id = "utm"  # UTM 절대좌표계
+        goal.header.stamp = rospy.Time(0)  # 최신 TF 사용
+    
+        # ✅ UTM 절대좌표 직접 사용 (변환 없음)
+        goal.pose.position.x = float(current_wp["x"])
+        goal.pose.position.y = float(current_wp["y"])
         goal.pose.position.z = 0.0
-        
-        # 방향은 다음 waypoint 방향으로 설정
+    
+        # ✅ 방향은 UTM 좌표계 기준으로 계산
         if self.current_waypoint_index < len(self.waypoints_utm) - 1:
             next_wp = self.waypoints_utm[self.current_waypoint_index + 1]
             dx = next_wp["x"] - current_wp["x"]
             dy = next_wp["y"] - current_wp["y"]
             yaw = math.atan2(dy, dx)
         else:
-            yaw = 0.0  # 마지막 waypoint는 정북 방향
-        
-        # Quaternion 설정
+            yaw = 0.0  # 북향
+    
+        # ✅ UTM 좌표계 기준 방향 설정
+        goal.pose.orientation.x = 0.0
+        goal.pose.orientation.y = 0.0
         goal.pose.orientation.z = math.sin(yaw / 2.0)
         goal.pose.orientation.w = math.cos(yaw / 2.0)
-        
+    
+        # ✅ 절대좌표 보장을 위한 로깅
+        rospy.loginfo(f"📍 UTM 절대좌표 Goal 전송:")
+        rospy.loginfo(f"   Frame: {goal.header.frame_id}")
+        rospy.loginfo(f"   Position: ({goal.pose.position.x:.1f}, {goal.pose.position.y:.1f})")
+        rospy.loginfo(f"   Orientation: yaw={math.degrees(yaw):.1f}°")
+    
         # Goal 발행
         self.goal_pub.publish(goal)
         self.goal_sent = True
-        
-        rospy.loginfo(f"📍 Waypoint {self.current_waypoint_index + 1}/{len(self.waypoints_utm)} 전송: "
-                      f"UTM({current_wp['x']:.1f}, {current_wp['y']:.1f})")
-        
-        # 상태 발행
+    
+        # ✅ 상태 발행 (절대좌표 정보 포함)
         status_msg = {
             "current_waypoint": self.current_waypoint_index + 1,
             "total_waypoints": len(self.waypoints_utm),
-            "target_utm": current_wp,
+            "target_utm_absolute": {
+                "x": float(current_wp["x"]),
+                "y": float(current_wp["y"]),
+                "frame": "utm"
+            },
             "status": "navigating"
         }
         self.status_pub.publish(String(data=json.dumps(status_msg)))
     
     def verify_waypoint_with_gps(self):
-        """GPS를 이용한 waypoint 도달 검증 (선택적)"""
-        # GPS 데이터가 있으면 검증, 없으면 바로 다음 waypoint로 진행
+        """GPS 기반 waypoint 도달 검증 (UTM 절대좌표 기준)"""
         if self.last_good_gps is None or self.current_waypoint_index >= len(self.waypoints_utm):
             rospy.loginfo("⚠️ GPS 검증 생략 - 다음 waypoint로 진행...")
             self.move_to_next_waypoint()
             return
-        
+    
         current_wp_utm = self.waypoints_utm[self.current_waypoint_index]
-        
-        # GPS 위치와 waypoint 간 거리 계산 (UTM 기준)
+    
+        # ✅ UTM 절대좌표 기준 거리 계산
         gps_distance = self.calculate_distance(self.last_good_gps, current_wp_utm)
-        
-        rospy.loginfo(f"📡 GPS 검증: 목적지까지 거리 {gps_distance:.2f}m")
-        
+    
+        rospy.loginfo(f"📡 GPS 검증 (UTM 절대좌표): 목적지까지 거리 {gps_distance:.2f}m")
+        rospy.loginfo(f"   현재 GPS UTM: ({self.last_good_gps['x']:.1f}, {self.last_good_gps['y']:.1f})")
+        rospy.loginfo(f"   목표 UTM: ({current_wp_utm['x']:.1f}, {current_wp_utm['y']:.1f})")
+    
         if gps_distance <= self.gps_verification_threshold:
             rospy.loginfo("✅ GPS 검증 성공! 다음 waypoint로 이동")
             self.move_to_next_waypoint()
@@ -230,6 +244,7 @@ class WaypointNavigator:
             rospy.loginfo("🔄 목적지 재전송...")
             rospy.sleep(2.0)
             self.send_current_waypoint()
+
     
     def move_to_next_waypoint(self):
         """다음 waypoint로 이동"""
@@ -270,27 +285,31 @@ class WaypointNavigator:
             rospy.loginfo_throttle(5, f"📍 UTM 기준 waypoint 근접: {pose_distance:.2f}m")
     
     def publish_waypoints_visualization(self, event):
-        """Waypoints 시각화를 위한 데이터 발행 (UTM 좌표 직접 발행)"""
+        """Waypoints 시각화를 위한 데이터 발행 (UTM 절대좌표)"""
         waypoints_data = {
+            "frame": "utm",  # 절대좌표계 명시
+            "coordinate_type": "absolute_utm",
             "waypoints": []
         }
-        
-        # UTM 좌표를 x, y 형태로 직접 발행
+    
+        # ✅ UTM 절대좌표를 x, y 형태로 직접 발행
         for i, wp in enumerate(self.waypoints_utm):
             waypoints_data["waypoints"].append({
-                "x": wp["x"],
-                "y": wp["y"],
                 "index": i,
-                "completed": i < self.current_waypoint_index
+                "x": float(wp["x"]),  # UTM 절대좌표
+                "y": float(wp["y"]),  # UTM 절대좌표
+                "completed": i < self.current_waypoint_index,
+                "is_current": i == self.current_waypoint_index
             })
-        
+    
         self.waypoints_pub.publish(String(data=json.dumps(waypoints_data)))
-        
-        # 로그 (시각화 디버깅용)
+    
+        # ✅ 디버깅 로그
         if len(waypoints_data["waypoints"]) > 0:
-            first_wp = waypoints_data["waypoints"][0]
-            rospy.loginfo_throttle(10, f"📍 UTM Waypoints 발행: {len(waypoints_data['waypoints'])}개, "
-                                   f"첫 번째: ({first_wp['x']:.1f}, {first_wp['y']:.1f})")
+            current_wp = waypoints_data["waypoints"][self.current_waypoint_index] if self.current_waypoint_index < len(waypoints_data["waypoints"]) else waypoints_data["waypoints"][0]
+            rospy.loginfo_throttle(10, f"📍 UTM 절대좌표 Waypoints 발행: {len(waypoints_data['waypoints'])}개")
+            rospy.loginfo_throttle(10, f"   현재 목표: ({current_wp['x']:.1f}, {current_wp['y']:.1f})")
+            rospy.loginfo_throttle(10, f"   좌표계: {waypoints_data['frame']} (절대좌표)")
 
 if __name__ == '__main__':
     try:

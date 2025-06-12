@@ -443,23 +443,39 @@ class UTMHeadingCorrection:
     #     except Exception as e:
     #         rospy.logerr(f"❌ Waypoints 오류: {e}")
     def waypoints_callback(self, msg):
-        """웨이포인트 저장 - UTM 좌표 직접 지원"""
+        """Waypoints 수신 및 파싱 (디버깅 강화)"""
         try:
-            waypoints_data = json.loads(msg.data)
+            data = json.loads(msg.data)
+            rospy.loginfo("📥 새로운 waypoints 수신됨")
         
-            if "waypoints" in waypoints_data:
-                self.latest_waypoints = waypoints_data["waypoints"]
-            elif "waypoints_array" in waypoints_data:
-                self.latest_waypoints = waypoints_data["waypoints_array"]
-            elif isinstance(waypoints_data, list):
-                self.latest_waypoints = waypoints_data
+            if "waypoints" in data:
+                self.latest_waypoints = data["waypoints"]
+
+                # ✅ 수신된 waypoints 정보 로깅 (전체)
+                rospy.loginfo(f"   - 총 {len(self.latest_waypoints)}개 waypoints")
+                rospy.loginfo(f"   - 좌표계: {data.get('frame', 'unknown')}")
+                rospy.loginfo(f"   - 좌표 타입: {data.get('coordinate_type', 'unknown')}")
+            
+                # 모든 waypoints 정보 로깅
+                for i, wp in enumerate(self.latest_waypoints):
+                    if "x" in wp:
+                        rospy.loginfo(f"   - WP{i+1}: UTM({wp['x']:.1f}, {wp['y']:.1f})")
+                    elif "lat" in wp:
+                        rospy.loginfo(f"   - WP{i+1}: GPS({wp['lat']:.6f}, {wp['lon']:.6f})")
+                    else:
+                        rospy.logwarn(f"   - WP{i+1}: 좌표 정보 없음")
+                
+                # 즉시 시각화 업데이트
+                self.visualize_waypoints()
+            
             else:
+                rospy.logwarn("⚠️ waypoints 키가 없는 데이터 수신")
                 self.latest_waypoints = None
             
-            rospy.loginfo_throttle(5, f"📍 Waypoints 수신: {len(self.latest_waypoints) if self.latest_waypoints else 0}개")
-            
         except Exception as e:
-            rospy.logerr(f"❌ Waypoints 오류: {e}")
+            rospy.logerr(f"❌ Waypoints 파싱 오류: {e}")
+            rospy.logerr(f"   수신 데이터: {msg.data}")
+            self.latest_waypoints = None
     
     def broadcast_dynamic_tf(self, event):
         """🔥 동적 TF 브로드캐스트 - 실시간 움직임 반영"""
@@ -658,9 +674,10 @@ class UTMHeadingCorrection:
         
     #     self.waypoints_pub.publish(marker_array)
     def visualize_waypoints(self):
-        """웨이포인트 시각화 - UTM 좌표 직접 지원"""
+        """웨이포인트 시각화 - 전체 UTM 절대좌표 시각화"""
         marker_array = MarkerArray()
-    
+
+        # ✅ 기존 마커 완전 삭제
         delete_marker = Marker()
         delete_marker.header.frame_id = "utm"
         delete_marker.header.stamp = rospy.Time.now()
@@ -668,79 +685,150 @@ class UTMHeadingCorrection:
         delete_marker.action = Marker.DELETEALL
         marker_array.markers.append(delete_marker)
     
+        # 텍스트 마커도 삭제
+        delete_text = Marker()
+        delete_text.header.frame_id = "utm"
+        delete_text.header.stamp = rospy.Time.now()
+        delete_text.ns = "waypoint_numbers"
+        delete_text.action = Marker.DELETEALL
+        marker_array.markers.append(delete_text)
+
         if not self.latest_waypoints:
+            rospy.logwarn_throttle(5, "❌ 시각화할 waypoints가 없음")
             self.waypoints_pub.publish(marker_array)
             return
+
+        total_waypoints = len(self.latest_waypoints)
+        # rospy.loginfo(f"📍 전체 {total_waypoints}개 waypoints 시각화 시작 (UTM 절대좌표)")
+
+        # ✅ 유효한 waypoints 수집 및 검증
+        valid_points = []
+        valid_waypoints = []
     
-        # 연결선
-        line_marker = Marker()
-        line_marker.header.frame_id = "utm"
-        line_marker.header.stamp = rospy.Time.now()
-        line_marker.ns = "global_waypoints"
-        line_marker.id = 0
-        line_marker.type = Marker.LINE_STRIP
-        line_marker.action = Marker.ADD
-        line_marker.scale.x = 3.0
-        line_marker.color.r = 1.0
-        line_marker.color.g = 0.5
-        line_marker.color.b = 0.0
-        line_marker.color.a = 1.0
-        line_marker.pose.orientation.w = 1.0
-    
-        points = []
-        for wp in self.latest_waypoints:
-            # UTM 좌표를 직접 사용하거나 GPS에서 변환
+        for i, wp in enumerate(self.latest_waypoints):
+            utm_x, utm_y = None, None
+        
             if "x" in wp and "y" in wp:
-                # UTM 좌표 직접 사용 (새로운 형식)
-                utm_x, utm_y = wp["x"], wp["y"]
+                utm_x, utm_y = float(wp["x"]), float(wp["y"])
+                # rospy.loginfo(f"   WP{i+1}: UTM 절대좌표 ({utm_x:.1f}, {utm_y:.1f})")
             elif "lat" in wp and "lon" in wp:
-                # GPS 좌표에서 UTM 변환 (기존 형식)
                 utm_x, utm_y, _ = self.gps_to_utm(wp["lat"], wp["lon"])
+                # rospy.loginfo(f"   WP{i+1}: GPS->UTM 변환 ({utm_x:.1f}, {utm_y:.1f})")
             else:
+                # rospy.logwarn(f"   WP{i+1}: 좌표 정보 없음 - 건너뜀")
                 continue
             
-            points.append(Point(x=utm_x, y=utm_y, z=0))
-    
-        line_marker.points = points
-        marker_array.markers.append(line_marker)
-    
-        # 웨이포인트 큐브들
-        for i, wp in enumerate(self.latest_waypoints):
-            # UTM 좌표를 직접 사용하거나 GPS에서 변환
-            if "x" in wp and "y" in wp:
-                utm_x, utm_y = wp["x"], wp["y"]
-            elif "lat" in wp and "lon" in wp:
-                utm_x, utm_y, _ = self.gps_to_utm(wp["lat"], wp["lon"])
-            else:
-                continue
+            if utm_x is not None and utm_y is not None:
+                valid_points.append(Point(x=utm_x, y=utm_y, z=0))
+                valid_waypoints.append((i, utm_x, utm_y))
+
+        if not valid_waypoints:
+            rospy.logerr("❌ 유효한 waypoints가 없음!")
+            self.waypoints_pub.publish(marker_array)
+            return
+
+        # rospy.loginfo(f"✅ {len(valid_waypoints)}개 유효한 waypoints 확인됨")
+
+        # ✅ 연결선 마커 (전체 경로 표시)
+        if len(valid_points) > 1:
+            line_marker = Marker()
+            line_marker.header.frame_id = "utm"  # UTM 절대좌표계
+            line_marker.header.stamp = rospy.Time.now()
+            line_marker.ns = "global_waypoints"
+            line_marker.id = 0
+            line_marker.type = Marker.LINE_STRIP
+            line_marker.action = Marker.ADD
+            line_marker.scale.x = 1.0  # 선 두께
+            line_marker.color.r = 1.0  # 빨간색
+            line_marker.color.g = 0.5  # 주황색
+            line_marker.color.b = 0.0
+            line_marker.color.a = 1.0  # 완전 불투명
+            line_marker.pose.orientation.w = 1.0
+            line_marker.lifetime = rospy.Duration(0)  # 영구 표시
+            line_marker.points = valid_points  # 전체 포인트 추가
         
+            marker_array.markers.append(line_marker)
+            # rospy.loginfo(f"   - 연결선 마커 생성: {len(valid_points)}개 포인트")
+
+        # ✅ 개별 웨이포인트 마커들 (전체 생성)
+        for wp_index, (original_index, utm_x, utm_y) in enumerate(valid_waypoints):
+            # 웨이포인트 큐브 마커
             cube = Marker()
-            cube.header.frame_id = "utm"
+            cube.header.frame_id = "utm"  # UTM 절대좌표계
             cube.header.stamp = rospy.Time.now()
             cube.ns = "global_waypoints"
-            cube.id = i + 1
+            cube.id = wp_index + 1  # 연속된 ID 사용
             cube.type = Marker.CUBE
             cube.action = Marker.ADD
             cube.pose.position.x = utm_x
             cube.pose.position.y = utm_y
-            cube.pose.position.z = 0
+            cube.pose.position.z = 2.0  # 지면에서 2m 위
             cube.pose.orientation.w = 1.0
-            cube.scale.x = 4.0
+            cube.scale.x = 4.0  # 더 큰 크기로 잘 보이게
             cube.scale.y = 4.0
-            cube.scale.z = 1.0
+            cube.scale.z = 2.5
         
-            # 완료된 waypoint는 초록색, 아직 안된 것은 노란색
-            if wp.get("completed", False):
-                cube.color.r, cube.color.g, cube.color.b = 0.0, 1.0, 0.0  # 초록색
+            # 색상 구분 (첫번째는 녹색, 마지막은 빨간색, 나머지는 노란색)
+            if original_index == 0:
+                cube.color.r, cube.color.g, cube.color.b = 0.0, 1.0, 0.0  # 시작점 - 녹색
+            elif original_index == total_waypoints - 1:
+                cube.color.r, cube.color.g, cube.color.b = 1.0, 0.0, 0.0  # 끝점 - 빨간색
             else:
-                cube.color.r, cube.color.g, cube.color.b = 1.0, 1.0, 0.0  # 노란색
-            cube.color.a = 1.0
-
+                cube.color.r, cube.color.g, cube.color.b = 1.0, 1.0, 0.0  # 중간점 - 노란색
+        
+            cube.color.a = 0.9
+            cube.lifetime = rospy.Duration(0)  # 영구 표시
+        
             marker_array.markers.append(cube)
+        
+            # ✅ 웨이포인트 번호 텍스트 (전체 생성)
+            text = Marker()
+            text.header.frame_id = "utm"  # UTM 절대좌표계
+            text.header.stamp = rospy.Time.now()
+            text.ns = "waypoint_numbers"
+            text.id = wp_index  # 연속된 ID 사용
+            text.type = Marker.TEXT_VIEW_FACING
+            text.action = Marker.ADD
+            text.pose.position.x = utm_x
+            text.pose.position.y = utm_y
+            text.pose.position.z = 6.0  # 큐브 위에 표시
+            text.pose.orientation.w = 1.0
+            text.scale.z = 4.0  # 더 큰 텍스트 크기
+            text.color.r, text.color.g, text.color.b, text.color.a = 1.0, 1.0, 1.0, 1.0  # 흰색
+            text.text = f"WP{original_index+1}"
+            text.lifetime = rospy.Duration(0)  # 영구 표시
+        
+            marker_array.markers.append(text)
+        
+            # rospy.loginfo(f"   - WP{original_index+1} 마커 생성: 큐브(ID:{cube.id}) + 텍스트(ID:{text.id}) at ({utm_x:.1f}, {utm_y:.1f})")
+
+        # ✅ 마커 발행 및 상세 디버깅
+        self.waypoints_pub.publish(marker_array)
     
-            self.waypoints_pub.publish(marker_array)
-            rospy.loginfo_throttle(10, f"🗺️ 웨이포인트 시각화: {len(self.latest_waypoints)}개 (UTM 좌표)")
+        # 발행된 마커 정보 상세 로깅
+        total_markers = len(marker_array.markers) - 2  # delete 마커 2개 제외
+        cube_markers = len(valid_waypoints)
+        text_markers = len(valid_waypoints)
+        line_markers = 1 if len(valid_points) > 1 else 0
     
+        # rospy.loginfo(f"✅ 전체 UTM 절대좌표 마커 발행 완료:")
+        # rospy.loginfo(f"   - 총 마커: {total_markers}개")
+        # rospy.loginfo(f"   - 경로선: {line_markers}개")
+        # rospy.loginfo(f"   - 웨이포인트 큐브: {cube_markers}개")
+        # rospy.loginfo(f"   - 번호 텍스트: {text_markers}개")
+        # rospy.loginfo(f"   - 전체 waypoints: {total_waypoints}개 중 {len(valid_waypoints)}개 시각화됨")
+    
+        if valid_waypoints:
+            first_wp = valid_waypoints[0]
+            last_wp = valid_waypoints[-1]
+        #     rospy.loginfo(f"   - 시작점: WP{first_wp[0]+1} UTM({first_wp[1]:.1f}, {first_wp[2]:.1f})")
+        #     rospy.loginfo(f"   - 끝점: WP{last_wp[0]+1} UTM({last_wp[1]:.1f}, {last_wp[2]:.1f})")
+        
+        # rospy.loginfo("📍 RViz에서 확인하세요:")
+        # rospy.loginfo("   1. Fixed Frame = utm")
+        # rospy.loginfo("   2. MarkerArray 추가 → Topic: /waypoint_markers")
+        # rospy.loginfo("   3. 녹색(시작) → 노란색(중간) → 빨간색(끝) 큐브들이 보여야 함")
+
     def create_utm_path_marker(self, trajectory, namespace, marker_id, color, line_width):
         """UTM 절대좌표 경로 마커 생성"""
         marker = Marker()

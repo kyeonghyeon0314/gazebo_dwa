@@ -317,7 +317,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/MarkerArray
       Enabled: true
-      Marker Topic: /MarkerArray
+      Marker Topic: /global_waypoints
       Name: MarkerArray
       Namespaces:
         {}
@@ -766,7 +766,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 111.21910095214844
+      Distance: 307.5849914550781
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -782,9 +782,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.5447958707809448
+      Pitch: 1.3797965049743652
       Target Frame: camera_init
-      Yaw: 4.6872029304504395
+      Yaw: 4.6272077560424805
     Saved: ~
 Window Geometry:
   Displays:
