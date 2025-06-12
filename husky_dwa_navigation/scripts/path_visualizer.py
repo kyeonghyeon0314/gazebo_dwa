@@ -15,7 +15,7 @@ from geometry_msgs.msg import TransformStamped
 import tf.transformations as tf_trans
 
 class UTMHeadingCorrection:
-    """UTM 기반 점진적 Heading 보정 Localizer - 동적 TF 반영"""
+    """UTM 기반 점진적 Heading 보정 Localizer - 개선된 시뮬레이션 지원"""
     
     def __init__(self):
         rospy.set_param('/use_sim_time', True)
@@ -84,35 +84,56 @@ class UTMHeadingCorrection:
         rospy.Timer(rospy.Duration(1.0), self.publish_gps_data)
         rospy.Timer(rospy.Duration(10.0), self.check_gradual_heading_correction)
         
-        rospy.loginfo("🚀 UTM 기반 Heading 보정 Localizer 시작!")
+        rospy.loginfo("🚀 UTM 기반 Heading 보정 Localizer 시작! (개선된 시뮬레이션 지원)")
         rospy.loginfo("📍 GPS_FIRST 전략: 첫 실시간 GPS 수신 시 UTM 원점 설정")
         rospy.loginfo("🌍 모든 좌표계 UTM 절대좌표로 통일!")
         rospy.loginfo("🔄 동적 TF 발행으로 실시간 움직임 반영!")
+        rospy.loginfo("🔄 점진적 Heading 보정 활성화 (10초마다)!")
+        rospy.loginfo("🔍 개선된 시뮬레이션 GPS 처리!")
 
     def setup_utm_origin_from_gps(self, lat, lon):
-        """🎯 FasterLIO와 동기화된 GPS 원점 설정"""
+        """🎯 개선된 GPS 원점 설정 - 시뮬레이션 좌표계 고려"""
+        rospy.loginfo(f"🔄 UTM 원점 설정 시도:")
+        rospy.loginfo(f"   - GPS 좌표: ({lat:.6f}, {lon:.6f})")
+        rospy.loginfo(f"   - first_gps_received: {self.first_gps_received}")
+        rospy.loginfo(f"   - fasterlio_origin exists: {self.fasterlio_origin is not None}")
+        
         if not self.first_gps_received and self.fasterlio_origin is not None:
-            # 시뮬레이션 GPS 설정 고려 (0.0, 0.0 기준)
+            # 🔥 개선된 시뮬레이션 GPS 처리
             if abs(lat) < 0.01 and abs(lon) < 0.01:
-                rospy.loginfo("🎮 시뮬레이션 GPS 감지: 0.0, 0.0 기준점 사용")
-                # 시뮬레이션에서는 직접 UTM 변환
-                easting, northing = lat * 111320, lon * 111320  # 근사 변환
+                rospy.loginfo("🎮 시뮬레이션 GPS 감지: simcity_gazebo.world (0,0) 기준")
+                
+                # 시뮬레이션에서는 GPS 좌표를 그대로 미터 단위로 변환
+                # simcity_gazebo.world는 (0,0) 기준이므로 직접 매핑
+                easting = lat * 111320.0   # 위도를 X축 (동서)로 매핑
+                northing = lon * 111320.0  # 경도를 Y축 (남북)으로 매핑
+                
+                # 🔥 FasterLIO 기준점에서 현재 위치까지의 오프셋을 고려하지 않고 
+                # GPS 좌표를 직접 월드 좌표계에 매핑
+                rospy.loginfo(f"   - 시뮬레이션 UTM 변환: ({easting:.1f}, {northing:.1f})")
+                
                 zone_num, zone_letter = 52, 'S'  # 시뮬레이션 기본 존
             else:
+                rospy.loginfo("🌍 실제 GPS 좌표 처리")
                 easting, northing, zone_num, zone_letter = utm.from_latlon(lat, lon)
             
-            # 🔥 FasterLIO 현재 위치 고려한 동기화
+            rospy.loginfo(f"   - UTM 변환 결과: ({easting:.1f}, {northing:.1f}) Zone:{zone_num}{zone_letter}")
+            
+            # 🔥 FasterLIO 현재 위치 고려한 동기화 (개선)
             if self.current_body_pose:
+                # FasterLIO 원점 기준 상대 위치
                 fasterlio_rel_x = self.current_body_pose["x"] - self.fasterlio_origin["x"]
                 fasterlio_rel_y = self.current_body_pose["y"] - self.fasterlio_origin["y"]
                 
                 # UTM 원점을 FasterLIO 현재 위치에 맞춰 조정
+                # GPS 위치에서 FasterLIO 상대 위치를 빼서 원점 설정
                 adjusted_easting = easting - fasterlio_rel_x
                 adjusted_northing = northing - fasterlio_rel_y
                 
-                rospy.loginfo(f"🔄 동기화: FasterLIO 상대위치({fasterlio_rel_x:.2f}, {fasterlio_rel_y:.2f})")
-                rospy.loginfo(f"   조정 전 UTM: ({easting:.1f}, {northing:.1f})")
-                rospy.loginfo(f"   조정 후 UTM: ({adjusted_easting:.1f}, {adjusted_northing:.1f})")
+                rospy.loginfo(f"🔄 FasterLIO 동기화:")
+                rospy.loginfo(f"   - FasterLIO 상대위치: ({fasterlio_rel_x:.2f}, {fasterlio_rel_y:.2f})")
+                rospy.loginfo(f"   - 조정 전 GPS UTM: ({easting:.1f}, {northing:.1f})")
+                rospy.loginfo(f"   - 조정 후 UTM 원점: ({adjusted_easting:.1f}, {adjusted_northing:.1f})")
                 
                 easting = adjusted_easting
                 northing = adjusted_northing
@@ -128,18 +149,22 @@ class UTMHeadingCorrection:
             
             rospy.loginfo(f"🎯 동기화된 UTM 원점 설정 완료!")
             rospy.loginfo(f"   GPS: ({lat:.6f}, {lon:.6f})")
-            rospy.loginfo(f"   UTM: ({easting:.1f}, {northing:.1f})")
+            rospy.loginfo(f"   UTM 원점: ({easting:.1f}, {northing:.1f})")
             rospy.loginfo(f"   Zone: {self.utm_zone}")
             
             return True
-        return False
+        else:
+            rospy.logwarn(f"❌ UTM 원점 설정 조건 미충족:")
+            rospy.logwarn(f"   - first_gps_received: {self.first_gps_received} (False여야 함)")
+            rospy.logwarn(f"   - fasterlio_origin: {self.fasterlio_origin is not None} (True여야 함)")
+            return False
     
     def gps_to_utm(self, lat, lon):
-        """GPS를 UTM 절대좌표로 변환 - 시뮬레이션 고려"""
+        """개선된 GPS → UTM 변환 - 시뮬레이션 좌표계 고려"""
         if abs(lat) < 0.01 and abs(lon) < 0.01:
-            # 시뮬레이션 GPS 처리
-            easting = lon * 111320
-            northing = lat * 111320
+            # 시뮬레이션 GPS 처리 - simcity_gazebo.world (0,0) 기준
+            easting = lat * 111320.0   # 위도 → X축 (동서방향)
+            northing = -lon * 111320.0  # 경도 → Y축 (남북방향)
             return easting, northing, "52S"
         else:
             easting, northing, zone_num, zone_letter = utm.from_latlon(lat, lon)
@@ -185,7 +210,7 @@ class UTMHeadingCorrection:
         return final_x, final_y
     
     def calculate_trajectory_heading(self, trajectory, min_distance=2.0):
-        """궤적에서 heading 계산"""
+        """궤적에서 heading 계산 - 개선된 알고리즘"""
         if len(trajectory) < 2:
             return None
         
@@ -212,16 +237,20 @@ class UTMHeadingCorrection:
         return best_heading
     
     def perform_initial_heading_alignment(self):
-        """🎯 초기 Heading 정렬"""
-        if len(self.fasterlio_trajectory_utm) < 3 or len(self.gps_trajectory_utm) < 3:
-            rospy.logwarn("❌ 초기 Heading 정렬용 궤적 데이터 부족")
+        """🎯 개선된 초기 Heading 정렬 - 임계값 완화"""
+        # 🔥 임계값 완화: 2개 이상의 데이터가 있으면 시도
+        if len(self.fasterlio_trajectory_utm) < 2 or len(self.gps_trajectory_utm) < 2:
+            rospy.logwarn("❌ 초기 Heading 정렬용 궤적 데이터 부족 (각각 2개 이상 필요)")
+            rospy.loginfo(f"   - FasterLIO 궤적: {len(self.fasterlio_trajectory_utm)}개")
+            rospy.loginfo(f"   - GPS 궤적: {len(self.gps_trajectory_utm)}개")
             return False
         
-        # 방향 계산
-        fasterlio_heading = self.calculate_trajectory_heading(self.fasterlio_trajectory_utm, 1.0)
-        gps_heading = self.calculate_trajectory_heading(self.gps_trajectory_utm, 1.0)
+        # 방향 계산 - 더 짧은 거리로도 시도
+        fasterlio_heading = self.calculate_trajectory_heading(self.fasterlio_trajectory_utm, 0.5)  # 0.5m로 완화
+        gps_heading = self.calculate_trajectory_heading(self.gps_trajectory_utm, 0.5)  # 0.5m로 완화
         
         if fasterlio_heading is None or gps_heading is None:
+            rospy.logwarn("❌ Heading 계산 실패 - 궤적 거리 부족")
             return False
         
         # 회전각 계산 및 정규화
@@ -243,23 +272,129 @@ class UTMHeadingCorrection:
         self.recalculate_all_trajectories()
         return True
     
+    def perform_gradual_heading_correction(self):
+        """🔄 점진적 Heading 보정 (주행 중 지속적 조정)"""
+        if len(self.corrected_trajectory_utm) < 5 or len(self.gps_trajectory_utm) < 5:  # 10개 → 5개로 완화
+            rospy.loginfo_throttle(30, "⏳ 점진적 보정용 데이터 부족 (5개 이상 필요)")
+            return False
+        
+        # 전체 방향 계산 (최신 5개 포인트 사용)
+        corrected_recent = self.corrected_trajectory_utm[-5:]
+        gps_recent = self.gps_trajectory_utm[-5:]
+        
+        corrected_start = corrected_recent[0]
+        corrected_end = corrected_recent[-1]
+        
+        gps_start = gps_recent[0]
+        gps_end = gps_recent[-1]
+        
+        # 보정된 궤적의 방향
+        corrected_dx = corrected_end["x"] - corrected_start["x"]
+        corrected_dy = corrected_end["y"] - corrected_start["y"]
+        corrected_distance = math.sqrt(corrected_dx**2 + corrected_dy**2)
+        
+        # GPS 궤적의 방향
+        gps_dx = gps_end["x"] - gps_start["x"]
+        gps_dy = gps_end["y"] - gps_start["y"]
+        gps_distance = math.sqrt(gps_dx**2 + gps_dy**2)
+        
+        # 최소 거리 확인 (완화)
+        if corrected_distance < 2.0 or gps_distance < 2.0:  # 5.0m → 2.0m로 완화
+            rospy.loginfo_throttle(30, f"⏳ 보정 거리 부족: 보정궤적={corrected_distance:.1f}m, GPS={gps_distance:.1f}m")
+            return False
+        
+        # 방향 계산
+        corrected_heading = math.atan2(corrected_dy, corrected_dx)
+        gps_heading = math.atan2(gps_dy, gps_dx)
+        
+        # 각도 차이 계산
+        angle_diff = gps_heading - corrected_heading
+        while angle_diff > math.pi:
+            angle_diff -= 2 * math.pi
+        while angle_diff < -math.pi:
+            angle_diff += 2 * math.pi
+        
+        # 보정 임계값 확인 (1도 이상 차이날 때만)
+        if abs(angle_diff) < math.radians(1.0):
+            rospy.loginfo_throttle(30, f"✅ Heading 정렬 양호: 차이={math.degrees(angle_diff):.1f}도")
+            return False
+        
+        # 점진적 보정 (10%씩 적용)
+        correction_ratio = 0.1
+        additional_correction = angle_diff * correction_ratio
+        
+        old_correction = self.correction_system["heading_correction"]
+        self.correction_system["heading_correction"] += additional_correction
+        
+        rospy.loginfo(f"🔄 점진적 Heading 보정 적용:")
+        rospy.loginfo(f"   보정된 궤적 방향: {math.degrees(corrected_heading):.1f}도")
+        rospy.loginfo(f"   GPS 궤적 방향: {math.degrees(gps_heading):.1f}도")
+        rospy.loginfo(f"   전체 각도 차이: {math.degrees(angle_diff):.1f}도")
+        rospy.loginfo(f"   추가 보정량: {math.degrees(additional_correction):.1f}도")
+        rospy.loginfo(f"   총 보정: {math.degrees(old_correction):.1f}° → {math.degrees(self.correction_system['heading_correction']):.1f}°")
+        
+        # 전체 궤적 재계산
+        self.recalculate_all_trajectories()
+        return True
+    
+    def check_gradual_heading_correction(self, event):
+        """점진적 Heading 보정 체크 (10초마다)"""
+        if not self.correction_system["initial_alignment_done"]:
+            rospy.loginfo_throttle(30, "⏳ 초기 정렬 대기 중... 점진적 보정 보류")
+            return
+        
+        current_time = rospy.Time.now().to_sec()
+        time_since_last = current_time - self.correction_system.get("last_correction_time", 0)
+        
+        # 10초마다 점진적 보정 시도
+        if time_since_last > 10.0:
+            rospy.loginfo("🔄 점진적 Heading 보정 체크 시작...")
+            
+            if self.perform_gradual_heading_correction():
+                self.correction_system["last_correction_time"] = current_time
+                rospy.loginfo("✅ 점진적 보정 완료!")
+                
+                # 끝점 거리 오차 계산 및 표시
+                distance_error = self.calculate_endpoint_distance_error()
+                if distance_error is not None:
+                    rospy.loginfo(f"📏 현재 끝점 거리 오차: {distance_error:.1f}m")
+            else:
+                rospy.loginfo_throttle(30, "ℹ️ 점진적 보정 불필요 또는 데이터 부족")
+    
+    def calculate_endpoint_distance_error(self):
+        """현재 끝점과 GPS 끝점 사이의 거리 오차 계산"""
+        if not self.corrected_trajectory_utm or not self.gps_trajectory_utm:
+            return None
+        
+        corrected_end = self.corrected_trajectory_utm[-1]
+        gps_end = self.gps_trajectory_utm[-1]
+        
+        dx = corrected_end["x"] - gps_end["x"]
+        dy = corrected_end["y"] - gps_end["y"]
+        distance_error = math.sqrt(dx*dx + dy*dy)
+        
+        return distance_error
+    
     def recalculate_all_trajectories(self):
-        """전체 FasterLIO 궤적 재계산"""
+        """전체 FasterLIO 궤적을 UTM으로 재계산"""
         if not self.fasterlio_trajectory_utm:
             return
         
+        # 보정된 궤적 재계산
         self.corrected_trajectory_utm = []
         
         for fasterlio_point in self.fasterlio_trajectory_utm:
+            # 원본 FasterLIO 좌표 (UTM 변환 전) 복원
             if not self.fasterlio_origin:
                 continue
                 
-            # 원본 복원 및 재변환
+            # UTM에서 FasterLIO 원본으로 역변환
             rel_x = fasterlio_point["x"] - self.utm_origin["easting"]
             rel_y = fasterlio_point["y"] - self.utm_origin["northing"]
             original_x = rel_x + self.fasterlio_origin["x"]
-            original_y = -(rel_y + self.fasterlio_origin["y"])
+            original_y = rel_y + self.fasterlio_origin["y"]
             
+            # 다시 보정 적용하여 UTM으로 변환
             corrected_utm_x, corrected_utm_y = self.fasterlio_to_utm(original_x, original_y)
             
             corrected_point = fasterlio_point.copy()
@@ -269,6 +404,11 @@ class UTMHeadingCorrection:
             self.corrected_trajectory_utm.append(corrected_point)
         
         rospy.loginfo(f"✅ {len(self.corrected_trajectory_utm)}개 포인트 재계산 완료")
+        
+        # 끝점 거리 오차 업데이트
+        distance_error = self.calculate_endpoint_distance_error()
+        if distance_error is not None:
+            rospy.loginfo(f"📏 재계산 후 끝점 거리 오차: {distance_error:.1f}m")
     
     def update_distance(self, new_position):
         """이동 거리 업데이트"""
@@ -287,7 +427,7 @@ class UTMHeadingCorrection:
         return math.sqrt(dx*dx + dy*dy) > threshold
     
     def fasterlio_callback(self, msg):
-        """🎯 FasterLIO 메인 콜백"""
+        """🎯 FasterLIO 메인 콜백 - 개선된 처리"""
         timestamp = msg.header.stamp.to_sec()
         
         # FasterLIO 원시 pose 저장
@@ -306,6 +446,7 @@ class UTMHeadingCorrection:
         if self.fasterlio_origin is None:
             self.fasterlio_origin = self.current_body_pose.copy()
             rospy.loginfo("🎯 FasterLIO 기준점 설정 완료")
+            rospy.loginfo(f"   원점: ({self.fasterlio_origin['x']:.2f}, {self.fasterlio_origin['y']:.2f})")
         
         # UTM 변환 (보정 없이)
         if self.utm_origin:
@@ -325,9 +466,10 @@ class UTMHeadingCorrection:
                 "timestamp": timestamp
             }
             
-            # FasterLIO 궤적 기록
-            if not self.fasterlio_trajectory_utm or self.distance_check_utm(utm_point, self.fasterlio_trajectory_utm[-1], 0.5):
+            # 🔥 궤적 기록 임계값 완화 (0.5m → 0.2m)
+            if not self.fasterlio_trajectory_utm or self.distance_check_utm(utm_point, self.fasterlio_trajectory_utm[-1], 0.2):
                 self.fasterlio_trajectory_utm.append(utm_point.copy())
+                rospy.loginfo_throttle(5, f"📍 FasterLIO 궤적 업데이트: {len(self.fasterlio_trajectory_utm)}개 포인트")
         
         # Heading 보정 적용하여 UTM 변환
         corrected_utm_x, corrected_utm_y = self.fasterlio_to_utm(
@@ -356,11 +498,12 @@ class UTMHeadingCorrection:
         self.update_distance(self.current_pose_utm)
         
         if self.utm_origin:
-            if not self.corrected_trajectory_utm or self.distance_check_utm(self.current_pose_utm, self.corrected_trajectory_utm[-1], 0.5):
+            # 🔥 궤적 기록 임계값 완화 (0.5m → 0.2m)
+            if not self.corrected_trajectory_utm or self.distance_check_utm(self.current_pose_utm, self.corrected_trajectory_utm[-1], 0.2):
                 self.corrected_trajectory_utm.append(self.current_pose_utm.copy())
         
-        # 초기 정렬 체크
-        if not self.correction_system["initial_alignment_done"] and self.total_distance >= 2.0:
+        # 🔥 초기 정렬 체크 - 거리 임계값 완화 (2.0m → 1.0m)
+        if not self.correction_system["initial_alignment_done"] and self.total_distance >= 1.0:
             rospy.loginfo(f"📏 총 이동거리 {self.total_distance:.1f}m → 초기 Heading 정렬 수행")
             self.perform_initial_heading_alignment()
         
@@ -369,8 +512,20 @@ class UTMHeadingCorrection:
         self.pose_covariance[0,0] = uncertainty
         self.pose_covariance[1,1] = uncertainty
         
-        # 상태 로그
-        rospy.loginfo_throttle(2, f"🎯 UTM 위치: ({corrected_utm_x:.1f}, {corrected_utm_y:.1f}), 누적 거리: {self.total_distance:.1f}m")
+        # ✅ 끝점 거리 오차 표시 및 상태 로깅
+        distance_error = self.calculate_endpoint_distance_error()
+        if distance_error is not None:
+            rospy.loginfo_throttle(2, f"🎯 UTM 위치: ({corrected_utm_x:.1f}, {corrected_utm_y:.1f}), "
+                                     f"끝점오차: {distance_error:.1f}m, 누적거리: {self.total_distance:.1f}m")
+        else:
+            rospy.loginfo_throttle(2, f"🎯 UTM 위치: ({corrected_utm_x:.1f}, {corrected_utm_y:.1f}), "
+                                     f"누적거리: {self.total_distance:.1f}m")
+        
+        # ✅ 보정 상태 표시
+        if self.correction_system["initial_alignment_done"]:
+            rospy.loginfo_throttle(5, f"🧭 Heading 보정 적용중: {math.degrees(self.correction_system['heading_correction']):.1f}도")
+        else:
+            rospy.loginfo_throttle(5, f"⏳ 초기 Heading 정렬 대기중 (이동거리: {self.total_distance:.1f}m/1.0m)")
 
     def apply_heading_correction_to_orientation(self, qx, qy, qz, qw):
         """Orientation에 heading 보정 적용"""
@@ -398,16 +553,31 @@ class UTMHeadingCorrection:
         return corrected_quat[0], corrected_quat[1], corrected_quat[2], corrected_quat[3]
     
     def gps_callback(self, msg):
-        """GPS 콜백 - FasterLIO와 동기화"""
+        """GPS 콜백 - 개선된 처리"""
+        # ✅ GPS 메시지 수신 로깅
+        rospy.loginfo_throttle(10, f"📡 GPS 메시지 수신: status={msg.status.status}, lat={msg.latitude:.6f}, lon={msg.longitude:.6f}")
+        
         if msg.status.status >= 0:
+            # ✅ GPS 신호 유효성 확인
+            rospy.loginfo_throttle(10, f"✅ GPS 신호 유효: status={msg.status.status}")
+            
             # FasterLIO 준비 대기
             if not self.first_gps_received:
+                rospy.loginfo_throttle(5, f"🔍 GPS 초기화 체크:")
+                rospy.loginfo_throttle(5, f"   - first_gps_received: {self.first_gps_received}")
+                rospy.loginfo_throttle(5, f"   - fasterlio_origin: {self.fasterlio_origin is not None}")
+                
                 if self.fasterlio_origin is None:
                     rospy.loginfo_throttle(2, "⏳ FasterLIO 대기 중... GPS 원점 설정 보류")
+                    rospy.loginfo_throttle(10, "   💡 해결방법: FasterLIO(/Odometry) 토픽이 정상 발행되는지 확인하세요")
                     return
                 else:
-                    self.setup_utm_origin_from_gps(msg.latitude, msg.longitude)
-                    rospy.loginfo(f"🎯 동기화된 GPS 원점: ({msg.latitude:.6f}, {msg.longitude:.6f})")
+                    rospy.loginfo("🚀 FasterLIO 준비 완료! GPS 원점 설정 시작...")
+                    success = self.setup_utm_origin_from_gps(msg.latitude, msg.longitude)
+                    if success:
+                        rospy.loginfo(f"🎯 GPS 기반 UTM 원점 설정 성공!")
+                    else:
+                        rospy.logwarn(f"❌ GPS 기반 UTM 원점 설정 실패!")
             
             timestamp = msg.header.stamp.to_sec()
             gps_utm_x, gps_utm_y, zone = self.gps_to_utm(msg.latitude, msg.longitude)
@@ -421,29 +591,16 @@ class UTMHeadingCorrection:
                 "utm_zone": zone
             }
             
-            # GPS 궤적 기록
-            if not self.gps_trajectory_utm or self.distance_check_utm(self.last_good_gps, self.gps_trajectory_utm[-1], 1.0):
+            # 🔥 GPS 궤적 기록 - 임계값 완화 (1.0m → 0.5m)
+            if not self.gps_trajectory_utm or self.distance_check_utm(self.last_good_gps, self.gps_trajectory_utm[-1], 0.5):
                 self.gps_trajectory_utm.append(self.last_good_gps.copy())
-                rospy.loginfo_throttle(5, f"📡 GPS UTM (동기화됨): ({gps_utm_x:.1f}, {gps_utm_y:.1f}) | 총 {len(self.gps_trajectory_utm)}개")
+                rospy.loginfo_throttle(5, f"📡 GPS UTM 궤적 업데이트: ({gps_utm_x:.1f}, {gps_utm_y:.1f}) | 총 {len(self.gps_trajectory_utm)}개")
+        else:
+            rospy.logwarn_throttle(10, f"❌ GPS 신호 무효: status={msg.status.status}")
+            rospy.logwarn_throttle(10, f"   💡 해결방법: GPS 안테나 및 신호 상태를 확인하세요")
     
-    # def waypoints_callback(self, msg):
-    #     """웨이포인트 저장"""
-    #     try:
-    #         waypoints_data = json.loads(msg.data)
-            
-    #         if "waypoints" in waypoints_data:
-    #             self.latest_waypoints = waypoints_data["waypoints"]
-    #         elif "waypoints_array" in waypoints_data:
-    #             self.latest_waypoints = waypoints_data["waypoints_array"]
-    #         elif isinstance(waypoints_data, list):
-    #             self.latest_waypoints = waypoints_data
-    #         else:
-    #             self.latest_waypoints = None
-                
-    #     except Exception as e:
-    #         rospy.logerr(f"❌ Waypoints 오류: {e}")
     def waypoints_callback(self, msg):
-        """Waypoints 수신 및 파싱 (디버깅 강화)"""
+        """Waypoints 수신 및 파싱"""
         try:
             data = json.loads(msg.data)
             rospy.loginfo("📥 새로운 waypoints 수신됨")
@@ -609,70 +766,6 @@ class UTMHeadingCorrection:
         marker.color.a = 0.3
         self.uncertainty_pub.publish(marker)
     
-    # def visualize_waypoints(self):
-    #     """웨이포인트 시각화"""
-    #     marker_array = MarkerArray()
-        
-    #     delete_marker = Marker()
-    #     delete_marker.header.frame_id = "utm"
-    #     delete_marker.header.stamp = rospy.Time.now()
-    #     delete_marker.ns = "global_waypoints"
-    #     delete_marker.action = Marker.DELETEALL
-    #     marker_array.markers.append(delete_marker)
-        
-    #     if not self.latest_waypoints:
-    #         self.waypoints_pub.publish(marker_array)
-    #         return
-        
-    #     # 연결선
-    #     line_marker = Marker()
-    #     line_marker.header.frame_id = "utm"
-    #     line_marker.header.stamp = rospy.Time.now()
-    #     line_marker.ns = "global_waypoints"
-    #     line_marker.id = 0
-    #     line_marker.type = Marker.LINE_STRIP
-    #     line_marker.action = Marker.ADD
-    #     line_marker.scale.x = 3.0
-    #     line_marker.color.r = 1.0
-    #     line_marker.color.g = 0.5
-    #     line_marker.color.b = 0.0
-    #     line_marker.color.a = 1.0
-    #     line_marker.pose.orientation.w = 1.0
-        
-    #     points = []
-    #     for wp in self.latest_waypoints:
-    #         utm_x, utm_y, _ = self.gps_to_utm(wp["lat"], wp["lon"])
-    #         points.append(Point(x=utm_x, y=utm_y, z=0))
-        
-    #     line_marker.points = points
-    #     marker_array.markers.append(line_marker)
-        
-    #     # 웨이포인트 큐브들
-    #     for i, wp in enumerate(self.latest_waypoints):
-    #         utm_x, utm_y, _ = self.gps_to_utm(wp["lat"], wp["lon"])
-            
-    #         cube = Marker()
-    #         cube.header.frame_id = "utm"
-    #         cube.header.stamp = rospy.Time.now()
-    #         cube.ns = "global_waypoints"
-    #         cube.id = i + 1
-    #         cube.type = Marker.CUBE
-    #         cube.action = Marker.ADD
-    #         cube.pose.position.x = utm_x
-    #         cube.pose.position.y = utm_y
-    #         cube.pose.position.z = 0
-    #         cube.pose.orientation.w = 1.0
-    #         cube.scale.x = 4.0
-    #         cube.scale.y = 4.0
-    #         cube.scale.z = 1.0
-    #         cube.color.r = 1.0
-    #         cube.color.g = 1.0
-    #         cube.color.b = 0.0
-    #         cube.color.a = 1.0
-            
-    #         marker_array.markers.append(cube)
-        
-    #     self.waypoints_pub.publish(marker_array)
     def visualize_waypoints(self):
         """웨이포인트 시각화 - 전체 UTM 절대좌표 시각화"""
         marker_array = MarkerArray()
@@ -699,7 +792,6 @@ class UTMHeadingCorrection:
             return
 
         total_waypoints = len(self.latest_waypoints)
-        # rospy.loginfo(f"📍 전체 {total_waypoints}개 waypoints 시각화 시작 (UTM 절대좌표)")
 
         # ✅ 유효한 waypoints 수집 및 검증
         valid_points = []
@@ -710,12 +802,9 @@ class UTMHeadingCorrection:
         
             if "x" in wp and "y" in wp:
                 utm_x, utm_y = float(wp["x"]), float(wp["y"])
-                # rospy.loginfo(f"   WP{i+1}: UTM 절대좌표 ({utm_x:.1f}, {utm_y:.1f})")
             elif "lat" in wp and "lon" in wp:
                 utm_x, utm_y, _ = self.gps_to_utm(wp["lat"], wp["lon"])
-                # rospy.loginfo(f"   WP{i+1}: GPS->UTM 변환 ({utm_x:.1f}, {utm_y:.1f})")
             else:
-                # rospy.logwarn(f"   WP{i+1}: 좌표 정보 없음 - 건너뜀")
                 continue
             
             if utm_x is not None and utm_y is not None:
@@ -726,8 +815,6 @@ class UTMHeadingCorrection:
             rospy.logerr("❌ 유효한 waypoints가 없음!")
             self.waypoints_pub.publish(marker_array)
             return
-
-        # rospy.loginfo(f"✅ {len(valid_waypoints)}개 유효한 waypoints 확인됨")
 
         # ✅ 연결선 마커 (전체 경로 표시)
         if len(valid_points) > 1:
@@ -748,7 +835,6 @@ class UTMHeadingCorrection:
             line_marker.points = valid_points  # 전체 포인트 추가
         
             marker_array.markers.append(line_marker)
-            # rospy.loginfo(f"   - 연결선 마커 생성: {len(valid_points)}개 포인트")
 
         # ✅ 개별 웨이포인트 마커들 (전체 생성)
         for wp_index, (original_index, utm_x, utm_y) in enumerate(valid_waypoints):
@@ -799,35 +885,9 @@ class UTMHeadingCorrection:
             text.lifetime = rospy.Duration(0)  # 영구 표시
         
             marker_array.markers.append(text)
-        
-            # rospy.loginfo(f"   - WP{original_index+1} 마커 생성: 큐브(ID:{cube.id}) + 텍스트(ID:{text.id}) at ({utm_x:.1f}, {utm_y:.1f})")
 
-        # ✅ 마커 발행 및 상세 디버깅
+        # ✅ 마커 발행
         self.waypoints_pub.publish(marker_array)
-    
-        # 발행된 마커 정보 상세 로깅
-        total_markers = len(marker_array.markers) - 2  # delete 마커 2개 제외
-        cube_markers = len(valid_waypoints)
-        text_markers = len(valid_waypoints)
-        line_markers = 1 if len(valid_points) > 1 else 0
-    
-        # rospy.loginfo(f"✅ 전체 UTM 절대좌표 마커 발행 완료:")
-        # rospy.loginfo(f"   - 총 마커: {total_markers}개")
-        # rospy.loginfo(f"   - 경로선: {line_markers}개")
-        # rospy.loginfo(f"   - 웨이포인트 큐브: {cube_markers}개")
-        # rospy.loginfo(f"   - 번호 텍스트: {text_markers}개")
-        # rospy.loginfo(f"   - 전체 waypoints: {total_waypoints}개 중 {len(valid_waypoints)}개 시각화됨")
-    
-        if valid_waypoints:
-            first_wp = valid_waypoints[0]
-            last_wp = valid_waypoints[-1]
-        #     rospy.loginfo(f"   - 시작점: WP{first_wp[0]+1} UTM({first_wp[1]:.1f}, {first_wp[2]:.1f})")
-        #     rospy.loginfo(f"   - 끝점: WP{last_wp[0]+1} UTM({last_wp[1]:.1f}, {last_wp[2]:.1f})")
-        
-        # rospy.loginfo("📍 RViz에서 확인하세요:")
-        # rospy.loginfo("   1. Fixed Frame = utm")
-        # rospy.loginfo("   2. MarkerArray 추가 → Topic: /waypoint_markers")
-        # rospy.loginfo("   3. 녹색(시작) → 노란색(중간) → 빨간색(끝) 큐브들이 보여야 함")
 
     def create_utm_path_marker(self, trajectory, namespace, marker_id, color, line_width):
         """UTM 절대좌표 경로 마커 생성"""
@@ -861,27 +921,16 @@ class UTMHeadingCorrection:
             }
             self.gps_data_pub.publish(json.dumps(gps_data))
 
-    def check_gradual_heading_correction(self, event):
-        """점진적 Heading 보정 체크"""
-        if not self.correction_system["initial_alignment_done"]:
-            return
-        
-        current_time = rospy.Time.now().to_sec()
-        time_since_last = current_time - self.correction_system.get("last_correction_time", 0)
-        
-        if time_since_last > 10.0:
-            # 점진적 보정 로직 구현 가능
-            self.correction_system["last_correction_time"] = current_time
-
-
 if __name__ == '__main__':
     try:
         localizer = UTMHeadingCorrection()
-        rospy.loginfo("🎉 UTM 기반 Heading 보정 Localizer 실행 중...")
+        rospy.loginfo("🎉 개선된 UTM 기반 Heading 보정 Localizer 실행 중...")
         rospy.loginfo("🌍 RViz Fixed Frame을 'utm'으로 설정하세요!")
         rospy.loginfo("✅ 모든 좌표계가 UTM 절대좌표로 통일되었습니다!")
         rospy.loginfo("🔄 FasterLIO와 GPS 시작점 자동 동기화!")
         rospy.loginfo("📡 동적 TF로 실시간 움직임 반영!")
+        rospy.loginfo("🔄 점진적 Heading 보정으로 지속적 정확도 향상!")
+        rospy.loginfo("🔍 개선된 시뮬레이션 GPS 처리로 더 빠른 초기화!")
         rospy.spin()
     except rospy.ROSInterruptException:
         rospy.loginfo("🛑 시스템 종료")

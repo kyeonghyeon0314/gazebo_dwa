@@ -54,9 +54,9 @@
   </include>
 
   <!-- ===== UTM 좌표계 기반 Localization (GPS Heading 보정) ===== -->
-  <node pkg="husky_dwa_navigation" type="path_visualizer.py" name="utm_heading_correction" output="screen">
+  <!-- <node pkg="husky_dwa_navigation" type="path_visualizer.py" name="utm_heading_correction" output="screen">
     <param name="use_sim_time" value="true" />
-  </node>
+  </node> -->
 
   <!-- ===== 포인트 클라우드 처리 파이프라인 ===== -->
   <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="screen" />
