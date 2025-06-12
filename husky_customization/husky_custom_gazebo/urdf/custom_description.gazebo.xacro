@@ -55,7 +55,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
     
       <!-- 매우 정밀한 시뮬레이션 설정 -->
       <drift>0.0 0.0 0.0</drift>                          <!-- 드리프트 없음 -->
-      <gaussianNoise>0.0005 0.0005 0.001</gaussianNoise>  <!-- 매우 낮은 노이즈 -->
+      <gaussianNoise>0.0001 0.0001 0.0002</gaussianNoise>  <!-- 매우 낮은 노이즈 -->
     
       <!-- 고품질 GPS 시뮬레이션 -->
       <velocityDrift>0.0 0.0 0.0</velocityDrift>
