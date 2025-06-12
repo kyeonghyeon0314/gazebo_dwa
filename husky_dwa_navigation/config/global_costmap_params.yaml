@@ -1,5 +1,5 @@
 global_costmap:
-  global_frame: utm
+  global_frame: map
   robot_base_frame: base_link
   update_frequency: 2
   publish_frequency: 2
@@ -10,7 +10,7 @@ global_costmap:
   resolution: 0.1
   transform_tolerance: 0.5
   reset_distance: 0.5
-  track_unknown_space: true
+  track_unknown_space: false
 
 
   plugins:

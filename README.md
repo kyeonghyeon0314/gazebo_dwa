@@ -1,7 +1,8 @@
 # 개요
 gazebo환경에 husky와 velodyne 라이다 추가하고 dwa를 통한 장애물 회피 기동
+- faster-lio와 gps를 통해 utm 좌표에 localizaiton 수행
 
-<div align="center">
+<!-- <div align="center">
   <div style="margin-bottom: 10px;">
     <img src="docs/video/dwa_final.gif" alt="drawing" width="100%"/>
     <p style="text-align: center;">시연영상 4배속</p>
@@ -25,29 +26,32 @@ gazebo환경에 husky와 velodyne 라이다 추가하고 dwa를 통한 장애물
     <img src="docs/video/move.gif" width="100%">
     <p style="text-align: center;">동적 장애물</p>
   </div>
+</div> -->
+<div align="center">
+  <div style="margin-bottom: 10px;">
+    <img src="docs/images/rqt_faster-lio.png" width="100%">
+    <p style="text-align: center;">rqt_graph</p>
+  </div>
 </div>
 
 # 주요 적용 사항
-## husky_customization [[Link](https://github.com/husky/husky_customization)]
+## main branch 참조 [[Link](https://github.com/kyeonghyeon0314/gazebo_dwa)]
 - husky에 HDL-32E 추가
-### husky_velodyne.launch 수행내용
-clearpath_playpen.world에 HDL-32E센서가 부착된 Husky A200 스폰 및 /velodyne_points 토픽 발행
+- husky_velodyne.launch 수행내용
+- husky_dwa_navigation
+- NavigationManager
 
-## husky_dwa_navigation
-- dwa_planner 패키지 사용
-- pcl_manager를 이용하여 PointCluod 필터링
-- config 파일 작성을 통한 각종 파라미터 최적화
+## Faster-lio + GPS 
+[팀원1](https://github.com/kdh044/global_path)의 ```path_visualizer.py```을 활용하여 제작하였습니다. 다만, 만들어두신 ```frame```의 구조는 utm->camera_init->body->base_link여서 시각화를 하는데 있어서 문제가 있었지만, 해당 구조를 아래와 같이 변경하여 진행하였습니다. 
+<div align="center">
+  <div style="margin-bottom: 10px;">
+    <img src="docs/images/frame.png" width="100%">
+    <p style="text-align: center;">frame 구조</p>
+  </div>
+</div>
 
-
-# 프로젝트의 목표에 맞는 개선 사항[[NavigiationManager](husky_dwa_navigation/scripts/navigation_manager_node.py)]
-
-본 [프로젝트](https://github.com/kyeonghyeon0314/25_Jairlab)를 위한 **NavigationManager**는 GPS waypoints 기반의 장거리 자율 주행을 위해 설계되었습니다. 기존의 ROS navigation stack이 갖는 로컬 costmap 범위 제한과 원거리 목표 접근의 한계를 극복하기 위한 지능형 내비게이션 시스템을 구현했습니다.
-
-### 주요기능
-
-- **실시간 중간 목표 생성 :** 로봇의 로컬 costmap 범위를 벗어난 목표를 처리하기 위해 중간 목표를 동적으로 생성
-- **장애물 회피 전략:** 경로 계획 실패 시 중간 목표를 좌우로 이동시켜 장애물 우회
-- **원본 목표 로 전환 :** Costmap 내에 원본 목표 존재시 중간 목표에서 원본 목표로 전환
+#### 기술적 부분
+faster-lio에서 map을 생성하는 부분을 없애고 x-y평면으로 정상여하여 pose를 추출하게 변형한다. [[팀원2](https://github.com/Cascio99)분이 제작]
 
 
 # TODO
@@ -57,7 +61,7 @@ cd husky_ws
 catkin_make
 
 cd src
-git clone https://github.com/kyeonghyeon0314/gazebo_dwa.git
+git clone https://github.com/kyeonghyeon0314/gazebo_dwa.git -b gps_localization
 
 # 필수 의존성 설치
 sudo apt-get install ros-noetic-gazebo-ros \
@@ -85,13 +89,14 @@ sudo apt-get install ros-noetic-gazebo-ros \
                      ros-noetic-dynamic-reconfigure \
                      ros-noetic-urdf \
                      ros-noetic-xacro
+pip install utm
 
 cd ..
 catkin_make
 
-# velodyne 인도 x
-roslaunch husky_dwa_navigation husky_velodyne_dwa.launch
+# 시뮬레이션 및 로봇 스폰
+roslaunch husky_dwa_navigation husky_gazebo_spawn.launch
 
-# ouster 인도O
-roslaunch husky_dwa_navigation husky_ouster_dwa.launch
+# dwa및 localization
+roslaunch husky_dwa_navigation husky_control_nav_localization.launch
 ```
