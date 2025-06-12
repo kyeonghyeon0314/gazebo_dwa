@@ -331,7 +331,7 @@ class UTMHeadingCorrection:
         
         # Heading 보정 적용하여 UTM 변환
         corrected_utm_x, corrected_utm_y = self.fasterlio_to_utm(
-            self.current_body_pose["x"], -self.current_body_pose["y"]
+            self.current_body_pose["x"], self.current_body_pose["y"]
         )
         
         # Orientation 보정
