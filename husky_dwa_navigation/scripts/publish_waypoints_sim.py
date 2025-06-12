@@ -44,7 +44,7 @@ class WaypointNavigator:
         # 상태 변수
         self.current_waypoint_index = 0
         self.waypoint_reached_threshold = 2.0  # 2미터 이내 도달로 판단
-        self.gps_verification_threshold = 3.0   # GPS 검증 기준 거리 (3미터)
+        self.gps_verification_threshold = 3.0   # GPS 검증 기준 거리 (3미터
         self.is_navigating = False
         self.goal_sent = False
         
