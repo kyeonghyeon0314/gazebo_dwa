@@ -2,13 +2,20 @@
 gazebo환경에 husky와 velodyne 라이다 추가하고 dwa를 통한 장애물 회피 기동
 - faster-lio와 gps를 통해 utm 좌표에 localizaiton 수행
 
-<!-- <div align="center">
+
+Bule : Gps
+Red : faster-lio + gps
+Gray : faster-lio
+
+ouster/imu를 활용하다 보니, 초기 heading이 맞지 않는 모습을 보입니다.
+
+<div align="center">
   <div style="margin-bottom: 10px;">
-    <img src="docs/video/dwa_final.gif" alt="drawing" width="100%"/>
-    <p style="text-align: center;">시연영상 4배속</p>
+    <img src="docs/video/final_goal.gif" alt="drawing" width="100%"/>
+    <p style="text-align: center;">시연영상</p>
   </div>
 </div>
-
+<!--
 <div align="center">
   <div style="margin-bottom: 10px;">
     <img src="docs/images/rqt.png" width="100%">
@@ -40,15 +47,6 @@ gazebo환경에 husky와 velodyne 라이다 추가하고 dwa를 통한 장애물
 - husky_velodyne.launch 수행내용
 - husky_dwa_navigation
 - NavigationManager
-
-## Faster-lio + GPS 
-[팀원1](https://github.com/kdh044/global_path)의 ```path_visualizer.py```을 활용하여 제작하였습니다. 다만, 만들어두신 ```frame```의 구조는 utm->camera_init->body->base_link여서 시각화를 하는데 있어서 문제가 있었지만, 해당 구조를 아래와 같이 변경하여 진행하였습니다. 
-<div align="center">
-  <div style="margin-bottom: 10px;">
-    <img src="docs/images/frame.png" width="100%">
-    <p style="text-align: center;">frame 구조</p>
-  </div>
-</div>
 
 #### 기술적 부분
 faster-lio에서 map을 생성하는 부분을 없애고 x-y평면으로 정상여하여 pose를 추출하게 변형한다. [[팀원2](https://github.com/Cascio99)분이 제작]
@@ -99,4 +97,12 @@ roslaunch husky_dwa_navigation husky_gazebo_spawn.launch
 
 # dwa및 localization
 roslaunch husky_dwa_navigation husky_control_nav_localization.launch
+
+# utm 프레임 및 시각화
+cd ~/husky_ws/src/gazebo_dwa/husky_dwa_navigation/scripts
+python3 path_visualizer.py
+
+# waypoints 발행
+cd ~/husky_ws/src/gazebo_dwa/husky_dwa_navigation/scripts
+python3 publish_waypoints_sim.py
 ```
