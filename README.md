@@ -2,7 +2,7 @@
 gazebo환경에 husky와 velodyne 라이다 추가하고 dwa를 통한 장애물 회피 기동
 - faster-lio와 gps를 통해 utm 좌표에 localizaiton 수행
 
-
+##### 영상 설명
 - Bule : Gps
 - Red : faster-lio + gps
 - Gray : faster-lio
