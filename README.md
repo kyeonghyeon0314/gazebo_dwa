@@ -1,6 +1,8 @@
 # 개요
 gazebo환경에 husky와 velodyne 라이다 추가하고 dwa를 통한 장애물 회피 기동
 
+더 발전된 기능은 ```gps_localizaiton``` branch에 존재합니다.
+
 <div align="center">
   <div style="margin-bottom: 10px;">
     <img src="docs/video/dwa_final.gif" alt="drawing" width="100%"/>
