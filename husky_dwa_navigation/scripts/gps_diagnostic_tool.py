@@ -3,15 +3,16 @@
 import rospy
 import json
 import math
+import utm
 import numpy as np
 from collections import deque, defaultdict
 from std_msgs.msg import String
 from sensor_msgs.msg import NavSatFix
-from geometry_msgs.msg import Vector3Stamped
+from geometry_msgs.msg import Vector3Stamped, PoseWithCovarianceStamped
 import time
 
 class GPSDiagnosticTool:
-    """GPS 센서 종합 진단 도구 - Citysim Gazebo 월드 대응"""
+    """GPS 센서 종합 진단 도구 - UTM 좌표 비교 기능 포함"""
     
     def __init__(self):
         rospy.init_node('gps_diagnostic_tool', anonymous=True)
@@ -20,6 +21,11 @@ class GPSDiagnosticTool:
         self.gps_data_buffer = deque(maxlen=1000)  # 최근 1000개 GPS 데이터
         self.fix_quality_history = deque(maxlen=100)
         self.position_history = deque(maxlen=200)
+        
+        # 🆕 UTM 좌표 비교용 데이터
+        self.current_gps_utm = None
+        self.current_estimated_utm = None
+        self.utm_comparison_history = deque(maxlen=100)
         
         # 통계 정보
         self.stats = {
@@ -42,7 +48,12 @@ class GPSDiagnosticTool:
             "satellite_count": 0,
             "hdop": 999.0,
             "vdop": 999.0,
-            "pdop": 999.0
+            "pdop": 999.0,
+            # 🆕 UTM 비교 메트릭
+            "utm_distance_error": 0.0,
+            "avg_utm_error": 0.0,
+            "max_utm_error": 0.0,
+            "utm_error_std": 0.0
         }
         
         # 문제점 탐지
@@ -53,7 +64,10 @@ class GPSDiagnosticTool:
             "low_update_rate": False,
             "frequent_fix_loss": False,
             "poor_accuracy": False,
-            "gazebo_simulation_issues": False
+            "gazebo_simulation_issues": False,
+            # 🆕 UTM 관련 이슈
+            "large_utm_error": False,
+            "utm_drift": False
         }
         
         # GPS 메시지 타임스탬프 추적
@@ -64,19 +78,154 @@ class GPSDiagnosticTool:
         self.diagnostic_pub = rospy.Publisher("/gps_diagnostics", String, queue_size=10)
         self.quality_pub = rospy.Publisher("/gps_quality_metrics", String, queue_size=10)
         self.status_pub = rospy.Publisher("/gps_status_summary", String, queue_size=10)
+        # 🆕 UTM 비교 결과 발행
+        self.utm_comparison_pub = rospy.Publisher("/gps_utm_comparison", String, queue_size=10)
         
         # Subscribers
         rospy.Subscriber("/ublox/fix", NavSatFix, self.gps_callback)
+        # 🆕 현재 추정 위치 구독 (path_visualizer에서 발행)
+        rospy.Subscriber("/robot_pose", PoseWithCovarianceStamped, self.estimated_pose_callback)
         
         # 진단 타이머
         rospy.Timer(rospy.Duration(2.0), self.analyze_gps_quality)
         rospy.Timer(rospy.Duration(5.0), self.detect_issues)
         rospy.Timer(rospy.Duration(1.0), self.publish_status)
         rospy.Timer(rospy.Duration(10.0), self.comprehensive_report)
+        # 🆕 UTM 비교 타이머
+        rospy.Timer(rospy.Duration(1.0), self.compare_utm_coordinates)
         
-        rospy.loginfo("🔍 GPS 진단 도구 시작! (Citysim Gazebo 월드 대응)")
+        rospy.loginfo("🔍 GPS 진단 도구 시작! (UTM 좌표 비교 기능 포함)")
         rospy.loginfo("📡 GPS 토픽: /ublox/fix")
+        rospy.loginfo("🎯 추정 위치 토픽: /robot_pose")
         rospy.loginfo("📊 진단 결과: /gps_diagnostics, /gps_quality_metrics, /gps_status_summary")
+        rospy.loginfo("🗺️ UTM 비교: /gps_utm_comparison")
+
+    def gps_to_utm(self, lat, lon):
+        """GPS를 UTM 절대좌표로 변환 - path_visualizer와 동일한 방식"""
+        if abs(lat) < 0.01 and abs(lon) < 0.01:
+            # 시뮬레이션 GPS 처리 (수정된 버전)
+            easting = lon * 111320   # 경도 → 동서방향 (X축)
+            northing = lat * 111320  # 위도 → 남북방향 (Y축)
+            return easting, northing, "52S"
+        else:
+            easting, northing, zone_num, zone_letter = utm.from_latlon(lat, lon)
+            return easting, northing, f"{zone_num}{zone_letter}"
+
+    def estimated_pose_callback(self, msg):
+        """🆕 추정 위치 콜백 (path_visualizer로부터)"""
+        self.current_estimated_utm = {
+            "x": msg.pose.pose.position.x,
+            "y": msg.pose.pose.position.y,
+            "z": msg.pose.pose.position.z,
+            "timestamp": msg.header.stamp.to_sec(),
+            "frame_id": msg.header.frame_id,
+            "covariance": np.array(msg.pose.covariance).reshape(6, 6)
+        }
+        
+        rospy.loginfo_throttle(5, f"🎯 추정 UTM 위치 업데이트: ({self.current_estimated_utm['x']:.1f}, {self.current_estimated_utm['y']:.1f})")
+
+    def compare_utm_coordinates(self, event):
+        """🆕 UTM 좌표 비교 및 분석"""
+        if not self.current_gps_utm or not self.current_estimated_utm:
+            return
+        
+        # 시간 동기화 체크 (5초 이내)
+        time_diff = abs(self.current_gps_utm["timestamp"] - self.current_estimated_utm["timestamp"])
+        if time_diff > 5.0:
+            rospy.logwarn_throttle(10, f"⚠️ GPS와 추정 위치 시간 동기화 문제: {time_diff:.1f}초 차이")
+            return
+        
+        # UTM 좌표 차이 계산
+        dx = self.current_gps_utm["x"] - self.current_estimated_utm["x"]
+        dy = self.current_gps_utm["y"] - self.current_estimated_utm["y"]
+        dz = self.current_gps_utm["z"] - self.current_estimated_utm["z"]
+        
+        horizontal_error = math.sqrt(dx**2 + dy**2)
+        total_error = math.sqrt(dx**2 + dy**2 + dz**2)
+        
+        # 비교 데이터 저장
+        comparison_data = {
+            "timestamp": rospy.Time.now().to_sec(),
+            "gps_utm": self.current_gps_utm.copy(),
+            "estimated_utm": self.current_estimated_utm.copy(),
+            "error": {
+                "dx": dx,
+                "dy": dy,
+                "dz": dz,
+                "horizontal": horizontal_error,
+                "total": total_error
+            },
+            "time_sync_diff": time_diff
+        }
+        
+        self.utm_comparison_history.append(comparison_data)
+        
+        # 메트릭 업데이트
+        self.quality_metrics["utm_distance_error"] = horizontal_error
+        
+        if len(self.utm_comparison_history) > 10:
+            errors = [c["error"]["horizontal"] for c in list(self.utm_comparison_history)[-20:]]
+            self.quality_metrics["avg_utm_error"] = np.mean(errors)
+            self.quality_metrics["max_utm_error"] = np.max(errors)
+            self.quality_metrics["utm_error_std"] = np.std(errors)
+        
+        # UTM 비교 결과 발행
+        self.publish_utm_comparison(comparison_data)
+        
+        # 로그 출력
+        rospy.loginfo_throttle(3, f"🔍 UTM 비교 - GPS:({self.current_gps_utm['x']:.1f},{self.current_gps_utm['y']:.1f}) vs 추정:({self.current_estimated_utm['x']:.1f},{self.current_estimated_utm['y']:.1f}) | 오차: {horizontal_error:.2f}m")
+
+    def publish_utm_comparison(self, comparison_data):
+        """🆕 UTM 비교 결과 발행"""
+        utm_report = {
+            "timestamp": comparison_data["timestamp"],
+            "comparison_summary": {
+                "gps_utm_coordinates": {
+                    "x": round(comparison_data["gps_utm"]["x"], 2),
+                    "y": round(comparison_data["gps_utm"]["y"], 2),
+                    "z": round(comparison_data["gps_utm"]["z"], 2),
+                    "zone": comparison_data["gps_utm"]["zone"]
+                },
+                "estimated_utm_coordinates": {
+                    "x": round(comparison_data["estimated_utm"]["x"], 2),
+                    "y": round(comparison_data["estimated_utm"]["y"], 2),
+                    "z": round(comparison_data["estimated_utm"]["z"], 2),
+                    "frame": comparison_data["estimated_utm"]["frame_id"]
+                },
+                "coordinate_differences": {
+                    "dx_m": round(comparison_data["error"]["dx"], 3),
+                    "dy_m": round(comparison_data["error"]["dy"], 3),
+                    "dz_m": round(comparison_data["error"]["dz"], 3),
+                    "horizontal_error_m": round(comparison_data["error"]["horizontal"], 3),
+                    "total_3d_error_m": round(comparison_data["error"]["total"], 3)
+                },
+                "error_analysis": {
+                    "current_error": round(self.quality_metrics["utm_distance_error"], 2),
+                    "average_error": round(self.quality_metrics["avg_utm_error"], 2),
+                    "max_error": round(self.quality_metrics["max_utm_error"], 2),
+                    "error_std_dev": round(self.quality_metrics["utm_error_std"], 2),
+                    "sample_count": len(self.utm_comparison_history)
+                },
+                "assessment": self.assess_utm_accuracy(comparison_data["error"]["horizontal"]),
+                "original_gps": {
+                    "latitude": comparison_data["gps_utm"]["lat"],
+                    "longitude": comparison_data["gps_utm"]["lon"]
+                }
+            }
+        }
+        
+        self.utm_comparison_pub.publish(json.dumps(utm_report, indent=2))
+
+    def assess_utm_accuracy(self, horizontal_error):
+        """🆕 UTM 정확도 평가"""
+        if horizontal_error < 1.0:
+            return {"level": "EXCELLENT", "description": "매우 정확한 위치 추정"}
+        elif horizontal_error < 3.0:
+            return {"level": "GOOD", "description": "양호한 위치 추정"}
+        elif horizontal_error < 10.0:
+            return {"level": "FAIR", "description": "보통 수준의 위치 추정"}
+        else:
+            return {"level": "POOR", "description": "위치 추정 정확도 개선 필요"}
 
     def gps_callback(self, msg):
         """GPS 메시지 분석"""
@@ -100,6 +249,21 @@ class GPSDiagnosticTool:
             "position_covariance": list(msg.position_covariance),
             "covariance_type": msg.position_covariance_type
         }
+        
+        # 🆕 GPS를 UTM으로 변환
+        if msg.status.status >= 0:  # Valid fix
+            utm_x, utm_y, utm_zone = self.gps_to_utm(msg.latitude, msg.longitude)
+            self.current_gps_utm = {
+                "x": utm_x,
+                "y": utm_y,
+                "z": msg.altitude,
+                "zone": utm_zone,
+                "timestamp": current_time,
+                "lat": msg.latitude,
+                "lon": msg.longitude
+            }
+            
+            rospy.loginfo_throttle(5, f"📡 GPS UTM 좌표: ({utm_x:.1f}, {utm_y:.1f})")
         
         self.gps_data_buffer.append(gps_data)
         self.stats["total_messages"] += 1
@@ -276,6 +440,19 @@ class GPSDiagnosticTool:
         # 노이즈 레벨 체크
         if self.quality_metrics["position_noise"] > 5.0:  # 5m 이상 노이즈
             rospy.logwarn_throttle(10, f"⚠️ 높은 GPS 노이즈: {self.quality_metrics['position_noise']:.1f}m")
+        
+        # 🆕 UTM 관련 문제점 탐지
+        if self.quality_metrics["utm_distance_error"] > 10.0:
+            self.issues["large_utm_error"] = True
+            rospy.logwarn_throttle(15, f"⚠️ 큰 UTM 좌표 오차: {self.quality_metrics['utm_distance_error']:.1f}m")
+        else:
+            self.issues["large_utm_error"] = False
+        
+        if self.quality_metrics["utm_error_std"] > 5.0:
+            self.issues["utm_drift"] = True
+            rospy.logwarn_throttle(20, f"⚠️ UTM 좌표 드리프트 감지: 표준편차 {self.quality_metrics['utm_error_std']:.1f}m")
+        else:
+            self.issues["utm_drift"] = False
 
     def publish_status(self, event):
         """GPS 상태 요약 발행"""
@@ -293,7 +470,13 @@ class GPSDiagnosticTool:
             "fix_ratio": round(self.stats["valid_messages"] / max(self.stats["total_messages"], 1), 3),
             "total_messages": self.stats["total_messages"],
             "active_issues": [issue for issue, active in self.issues.items() if active],
-            "latest_gps": self.gps_data_buffer[-1] if self.gps_data_buffer else None
+            "latest_gps": self.gps_data_buffer[-1] if self.gps_data_buffer else None,
+            # 🆕 UTM 비교 정보
+            "utm_comparison": {
+                "current_error_m": round(self.quality_metrics["utm_distance_error"], 2),
+                "average_error_m": round(self.quality_metrics["avg_utm_error"], 2),
+                "max_error_m": round(self.quality_metrics["max_utm_error"], 2)
+            } if hasattr(self, 'current_gps_utm') and self.current_gps_utm else None
         }
         
         self.status_pub.publish(json.dumps(status_summary, indent=2))
@@ -315,7 +498,14 @@ class GPSDiagnosticTool:
             "detected_issues": {k: v for k, v in self.issues.items() if v},
             "recent_gps_samples": list(self.gps_data_buffer)[-5:],  # 최근 5개 샘플
             "gazebo_diagnostics": self.diagnose_gazebo_environment(),
-            "citysim_world_info": self.analyze_citysim_world()
+            "citysim_world_info": self.analyze_citysim_world(),
+            # 🆕 UTM 비교 정보
+            "utm_comparison_summary": {
+                "current_gps_utm": getattr(self, 'current_gps_utm', None),
+                "current_estimated_utm": getattr(self, 'current_estimated_utm', None),
+                "total_comparisons": len(getattr(self, 'utm_comparison_history', [])),
+                "recent_comparisons": list(getattr(self, 'utm_comparison_history', []))[-3:] if hasattr(self, 'utm_comparison_history') else []
+            }
         }
         
         self.diagnostic_pub.publish(json.dumps(report, indent=2))
@@ -440,6 +630,12 @@ class GPSDiagnosticTool:
         if self.quality_metrics["position_noise"] > 3.0:
             confidence -= 15
         
+        # 🆕 UTM 오차에 따른 신뢰도 감점
+        if self.quality_metrics["utm_distance_error"] > 10.0:
+            confidence -= 25
+        elif self.quality_metrics["utm_distance_error"] > 5.0:
+            confidence -= 15
+        
         return max(0, min(100, confidence))
 
     def get_recommendations(self):
@@ -451,6 +647,13 @@ class GPSDiagnosticTool:
         
         if self.issues["low_update_rate"]:
             recommendations.append("GPS 플러그인 updateRate를 10.0으로 설정 (custom_description.gazebo.xacro)")
+        
+        # 🆕 UTM 관련 권장사항
+        if self.issues["large_utm_error"]:
+            recommendations.append(f"UTM 좌표 오차가 큽니다 ({self.quality_metrics['utm_distance_error']:.1f}m). GPS-FasterLIO 융합 파라미터 조정 필요")
+        
+        if self.issues["utm_drift"]:
+            recommendations.append("UTM 좌표 드리프트가 감지되었습니다. Heading 보정 시스템 점검 필요")
         
         if self.issues["high_hdop"]:
             recommendations.append("GPS gaussianNoise를 0.001 0.001 0.002로 낮게 설정하여 정밀도 향상")
@@ -474,7 +677,7 @@ class GPSDiagnosticTool:
         return recommendations
 
     def print_diagnostic_summary(self, report):
-        """진단 요약 콘솔 출력 - Citysim (0,0) 월드 특화"""
+        """진단 요약 콘솔 출력 - UTM 좌표 정보 포함"""
         print("\n" + "="*70)
         print("🔍 GPS 진단 보고서 (Citysim Gazebo World - 0,0 기준)")
         print("="*70)
@@ -491,11 +694,32 @@ class GPSDiagnosticTool:
         print(f"🛰️ HDOP: {self.quality_metrics['hdop']:.2f}")
         print(f"✅ Fix 성공률: {(self.stats['valid_messages']/max(self.stats['total_messages'],1)*100):.1f}%")
         
-        # 현재 GPS 위치 표시 (월드 기준점과의 관계)
+        # 🆕 수정된 현재 위치 출력 부분
         if self.gps_data_buffer:
             latest = self.gps_data_buffer[-1]
             distance_from_origin = math.sqrt(latest['latitude']**2 + latest['longitude']**2)
-            print(f"📍 현재 위치: ({latest['latitude']:.6f}, {latest['longitude']:.6f})")
+            
+            # GPS 위치 (위도/경도)
+            print(f"📍 현재 GPS 위치: ({latest['latitude']:.6f}, {latest['longitude']:.6f})")
+            
+            # GPS UTM 좌표
+            if hasattr(self, 'current_gps_utm') and self.current_gps_utm:
+                print(f"📍 현재 GPS UTM: ({self.current_gps_utm['x']:.1f}, {self.current_gps_utm['y']:.1f})")
+            
+            # 추정 UTM 위치
+            if hasattr(self, 'current_estimated_utm') and self.current_estimated_utm:
+                print(f"🎯 추정 UTM 위치: ({self.current_estimated_utm['x']:.1f}, {self.current_estimated_utm['y']:.1f})")
+                
+                # UTM 좌표 오차
+                if hasattr(self, 'current_gps_utm') and self.current_gps_utm:
+                    utm_error = self.quality_metrics.get("utm_distance_error", 0.0)
+                    if utm_error > 0:
+                        error_status = "❌" if utm_error > 10 else "⚠️" if utm_error > 3 else "✅"
+                        print(f"📏 UTM 좌표 오차: {error_status} {utm_error:.2f} m")
+            else:
+                print(f"🎯 추정 UTM 위치: ⏳ 대기 중...")
+            
+            # 월드 기준점과의 거리
             print(f"🌍 월드 기준점(0,0)으로부터: {distance_from_origin:.6f}도 ({distance_from_origin*111320:.1f}m)")
         
         if report["detected_issues"]:
@@ -518,6 +742,7 @@ class GPSDiagnosticTool:
         print("rostopic hz /ublox/fix")
         print("rostopic echo /gps_status_summary")
         print("rostopic echo /gps_diagnostics | jq .")
+        print("rostopic echo /gps_utm_comparison | jq .")
         print("rosparam get /gazebo/gps_controller")
         print("─────────────────────────────────")
 
@@ -526,9 +751,10 @@ if __name__ == '__main__':
         diagnostic_tool = GPSDiagnosticTool()
         diagnostic_tool.generate_quick_commands()
         
-        rospy.loginfo("🎯 GPS 진단 도구 실행 중... (Citysim Gazebo)")
+        rospy.loginfo("🎯 GPS 진단 도구 실행 중... (UTM 좌표 비교 기능 포함)")
         rospy.loginfo("📊 실시간 상태: rostopic echo /gps_status_summary")
         rospy.loginfo("📋 상세 진단: rostopic echo /gps_diagnostics")
+        rospy.loginfo("🗺️ UTM 비교: rostopic echo /gps_utm_comparison")
         
         rospy.spin()
         
