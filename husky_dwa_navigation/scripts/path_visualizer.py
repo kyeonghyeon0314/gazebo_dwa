@@ -138,8 +138,8 @@ class UTMHeadingCorrection:
         """GPS를 UTM 절대좌표로 변환 - 시뮬레이션 고려"""
         if abs(lat) < 0.01 and abs(lon) < 0.01:
             # 시뮬레이션 GPS 처리
-            easting = lat * 111320
-            northing = lon * 111320
+            easting = lon * 111320
+            northing = lat * 111320
             return easting, northing, "52S"
         else:
             easting, northing, zone_num, zone_letter = utm.from_latlon(lat, lon)
@@ -370,7 +370,7 @@ class UTMHeadingCorrection:
         self.pose_covariance[1,1] = uncertainty
         
         # 상태 로그
-        rospy.loginfo_throttle(2, f"🎯 UTM 위치: ({corrected_utm_x:.1f}, {corrected_utm_y:.1f}), 총거리: {self.total_distance:.1f}m")
+        rospy.loginfo_throttle(2, f"🎯 UTM 위치: ({corrected_utm_x:.1f}, {corrected_utm_y:.1f}), 누적 거리: {self.total_distance:.1f}m")
 
     def apply_heading_correction_to_orientation(self, qx, qy, qz, qw):
         """Orientation에 heading 보정 적용"""

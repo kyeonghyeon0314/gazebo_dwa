@@ -13,6 +13,7 @@ Panels:
         - /Odometry1/Odometry1/Covariance1/Position1
         - /Odometry1/Odometry1/Covariance1/Orientation1
         - /MarkerArray1/Namespaces1
+        - /Path2
       Splitter Ratio: 0.44062501192092896
     Tree Height: 1137
   - Class: rviz/Selection
@@ -325,7 +326,7 @@ Visualization Manager:
     - Alpha: 1
       Buffer Length: 1
       Class: rviz/Path
-      Color: 25; 255; 0
+      Color: 239; 41; 41
       Enabled: true
       Head Diameter: 0.30000001192092896
       Head Length: 0.20000000298023224
@@ -434,7 +435,7 @@ Visualization Manager:
       Marker Topic: /corrected_path
       Name: Marker
       Namespaces:
-        {}
+        corrected_path: true
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -442,7 +443,7 @@ Visualization Manager:
       Marker Topic: /fasterlio_path
       Name: Marker
       Namespaces:
-        {}
+        fasterlio_original: true
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -450,7 +451,7 @@ Visualization Manager:
       Marker Topic: /gps_path
       Name: Marker
       Namespaces:
-        {}
+        gps_path: true
       Queue Size: 100
       Value: true
     - Alpha: 1
@@ -765,7 +766,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 47.861385345458984
+      Distance: 41.39923095703125
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -781,9 +782,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.8397961258888245
+      Pitch: 1.1297961473464966
       Target Frame: camera_init
-      Yaw: 2.7822039127349854
+      Yaw: 2.432199478149414
     Saved: ~
 Window Geometry:
   Displays:
