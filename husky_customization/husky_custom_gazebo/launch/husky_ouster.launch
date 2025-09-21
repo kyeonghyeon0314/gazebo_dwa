@@ -10,23 +10,23 @@
   <env name="HUSKY_UR5_ENABLED" value="false"/>
   <env name="GAZEBO_MODEL_PATH" value="$(find husky_custom_gazebo)/models:$(optenv GAZEBO_MODEL_PATH)"/>
 
-  <!-- <include file="$(find gazebo_ros)/launch/empty_world.launch">
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
     <arg name="world_name" value="$(find husky_custom_gazebo)/worlds/custom_world.world"/>
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
     <arg name="gui" value="true"/>
     <arg name="headless" value="false"/>
     <arg name="debug" value="false"/>
-  </include> -->
+  </include>
 
-  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+  <!-- <include file="$(find gazebo_ros)/launch/empty_world.launch">
     <arg name="world_name" default="$(find husky_custom_gazebo)/worlds/citysim_gazebo.world"/>
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
     <arg name="gui" value="true"/>
     <arg name="headless" value="false"/>
     <arg name="debug" value="false"/>
-  </include>
+  </include> -->
   
   <!-- Husky control -->
   <include file="$(find husky_control)/launch/control.launch" />

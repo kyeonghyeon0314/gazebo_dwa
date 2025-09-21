@@ -55,12 +55,7 @@
     <param name="controller_frequency" value="10.0" />
     <param name="planner_frequency" value="5.0" />
 
-    <!-- GlobalPlanner 파라미터 -->
-    <param name="GlobalPlanner/allow_unknown" value="true" />
-    <param name="GlobalPlanner/use_dijkstra" value="true" />
-    <param name="GlobalPlanner/use_quadratic" value="true" />
-    <param name="GlobalPlanner/use_grid_path" value="false" />
-    <param name="GlobalPlanner/old_navfn_behavior" value="false" />
+    <!-- GlobalPlanner 파라미터는 dwa_local_planner_params.yaml에서 로드됨 -->
   </node>
 
   <!-- StaticTransformPublisher: Velodyne 장치의 정확한 위치 게시 -->
