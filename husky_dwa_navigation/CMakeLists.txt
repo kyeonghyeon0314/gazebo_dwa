@@ -51,7 +51,7 @@ include_directories(
 # Python 3 스크립트 설치 설정
 catkin_install_python(
   PROGRAMS 
-    scripts/navigation_manager_node.py
+    scripts/navigation_manager.py
     scripts/path_visualizer.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
@@ -67,7 +67,7 @@ install(
 # Python 스크립트에 실행 권한 부여
 install(
   PROGRAMS
-    scripts/navigation_manager_node.py
+    scripts/navigation_manager.py
     scripts/path_visualizer.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

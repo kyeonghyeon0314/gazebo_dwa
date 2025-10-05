@@ -8,19 +8,32 @@
   <!-- GPU 가속화 -->
   <env name="CUDA_VISIBLE_DEVICES" value="0"/>
   <env name="GAZEBO_GPU_RAY" value="1"/>
-  <env name="SVGA_VGPU10" value="1"/>
+  <env name="SVGA_VGPU10" value="0"/>
+  <env name="LIBGL_ALWAYS_SOFTWARE" value="1"/>
   
   <!-- 환경 변수 설정 -->
   <env name="HUSKY_LMS1XX_ENABLED" value="false"/>
   <env name="HUSKY_UR5_ENABLED" value="false"/>
   <env name="GAZEBO_MODEL_PATH" value="$(find husky_custom_gazebo)/models:$(optenv GAZEBO_MODEL_PATH)"/>
 
+  <!-- GUI 실행 옵션 (크래시 시 gui:=false로 실행) -->
+  <arg name="gui" default="true"/>
+
+  <!-- 월드 선택 옵션 -->
+  <arg name="world_name" default="$(find husky_custom_gazebo)/worlds/example.world"/>
+  <!-- 다른 옵션들:
+       - worlds/empty.world (빈 월드)
+       - worlds/willowgarage.world (Willow Garage)
+       - worlds/playpen.world (작은 테스트 환경)
+       - $(find husky_custom_gazebo)/worlds/custom_world.world (커스텀 월드)
+  -->
+
   <!-- Gazebo 월드 실행 -->
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
-    <arg name="world_name" default="$(find husky_custom_gazebo)/worlds/citysim_gazebo.world"/>
+    <arg name="world_name" value="$(arg world_name)"/>
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
-    <arg name="gui" value="true"/>
+    <arg name="gui" value="$(arg gui)"/>
     <arg name="headless" value="false"/>
     <arg name="debug" value="false"/>
   </include>
@@ -31,5 +44,5 @@
   <!-- 로봇 스폰 -->
   <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model"
         output="screen"
-        args="-urdf -model husky -param robot_description -z 1" />   
+        args="-urdf -model husky -param robot_description -z 1" />
 </launch>

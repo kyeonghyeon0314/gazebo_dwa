@@ -2,44 +2,8 @@
 gazebo환경에 husky와 velodyne 라이다 추가하고 dwa를 통한 장애물 회피 기동
 - faster-lio와 gps를 통해 utm 좌표에 localizaiton 수행
 
-##### 영상 설명
-- Bule : Gps
-- Red : faster-lio + gps
-- Gray : faster-lio
 
-ouster/imu를 활용하다 보니, 초기 heading이 맞지 않는 모습을 보입니다.
 
-<div align="center">
-  <div style="margin-bottom: 10px;">
-    <img src="docs/video/final_goal.gif" alt="drawing" width="100%"/>
-    <p style="text-align: center;">시연영상</p>
-  </div>
-</div>
-<!--
-<div align="center">
-  <div style="margin-bottom: 10px;">
-    <img src="docs/images/rqt.png" width="100%">
-    <p style="text-align: center;">rqt_graph</p>
-  </div>
-</div>
-<div align="center">
-  <div style="margin-bottom: 10px;">
-    <img src="docs/images/laserScan.png" width="100%">
-    <p style="text-align: center;">laserScan</p>
-  </div>
-</div>
-<div align="center">
-  <div style="margin-bottom: 10px;">
-    <img src="docs/video/move.gif" width="100%">
-    <p style="text-align: center;">동적 장애물</p>
-  </div>
-</div> -->
-<div align="center">
-  <div style="margin-bottom: 10px;">
-    <img src="docs/images/rqt_graph_final.png" width="100%">
-    <p style="text-align: center;">rqt_graph</p>
-  </div>
-</div>
 
 # 주요 적용 사항
 ## main branch 참조 [[Link](https://github.com/kyeonghyeon0314/gazebo_dwa)]
@@ -62,7 +26,7 @@ cd src
 git clone https://github.com/kyeonghyeon0314/gazebo_dwa.git -b gps_localization
 
 # 필수 의존성 설치
-sudo apt-get install ros-noetic-gazebo-ros \
+sudo apt-get install -y ros-noetic-gazebo-ros \
                      ros-noetic-roscpp \
                      ros-noetic-rospy \
                      ros-noetic-sensor-msgs \
