@@ -146,7 +146,12 @@ class NavigationManager:
         # 원본 목표 위치를 costmap 프레임으로 변환
         try:
             if self.original_goal.header.frame_id != self.costmap.header.frame_id:
-                goal_in_costmap_frame = self.tf_buffer.transform(self.original_goal, self.costmap.header.frame_id, rospy.Duration(1.0))
+                # 타임스탬프를 현재 시간으로 업데이트하여 extrapolation 방지
+                goal_copy = PoseStamped()
+                goal_copy.header = self.original_goal.header
+                goal_copy.header.stamp = rospy.Time(0)  # 최신 TF 사용
+                goal_copy.pose = self.original_goal.pose
+                goal_in_costmap_frame = self.tf_buffer.transform(goal_copy, self.costmap.header.frame_id, rospy.Duration(1.0))
             else:
                 goal_in_costmap_frame = self.original_goal
                 

@@ -1,0 +1,99 @@
+# EKF Localization Configuration
+# FasterLIO (prediction) + GPS (update) sensor fusion
+
+# ========================================================================================
+# 좌표계 설정 (EKF가 map->odom->base_link TF 발행)
+# ========================================================================================
+map_frame: map             # 전역 프레임 (GPS 기준)
+odom_frame: odom           # 로컬 프레임 (연속적인 Odometry 기준)
+base_link_frame: base_link # 로봇 기준 프레임
+world_frame: odom          # EKF 작동 프레임 (odom에서 작동, odom->base_link TF 발행)
+
+# ========================================================================================
+# EKF 기본 파라미터
+# ========================================================================================
+frequency: 10              # EKF 업데이트 주파수 (Hz) - 입력 센서와 맞춤
+sensor_timeout: 0.1        # 센서 타임아웃 (초)
+two_d_mode: true           # 2D 모드 활성화 (Z, Roll, Pitch를 0으로 고정)
+transform_time_offset: 0.0 # TF 시간 오프셋
+transform_timeout: 0.0     # TF 타임아웃
+print_diagnostics: true    # 진단 정보 출력
+debug: false               # 디버그 모드
+
+# ========================================================================================
+# 센서 구성
+# ========================================================================================
+
+# odom0: FasterLIO UTM 변환 Odometry (고정밀 상대 위치 + 방향)
+odom0: /odometry/ieskf_utm
+odom0_config: [true,  true,  false,    # [Pose] x, y, z
+               false, false, true,     # [Pose] roll, pitch, yaw
+               false, false, false,    # [Twist] vx, vy, vz
+               false, false, false,    # [Twist] vroll, vpitch, vyaw
+               false, false, false]    # [Accel] ax, ay, az
+odom0_queue_size: 10
+odom0_nodelay: true
+odom0_differential: false
+odom0_relative: false
+
+
+# pose0: GPS -> UTM 변환 데이터 (절대 위치)
+pose0: /pose/gps
+pose0_config: [true,  true,  false,   # [Pose] x, y, z (x, y만 사용)
+               false, false, false,   # [Pose] roll, pitch, yaw (사용 안함)
+               false, false, false,   # [Twist] (메시지에 포함되지 않음)
+               false, false, false,   # [Twist]
+               false, false, false]   # [Accel]
+pose0_queue_size: 10
+pose0_nodelay: true
+pose0_differential: false  # 절대 위치이므로 false
+pose0_relative: false
+
+
+# imu0: faster-lio가 이미 IMU를 융합하므로 EKF에서는 사용하지 않음
+# imu0: /ouster/imu
+# imu0_config: [false, false, false,
+#                false, false, false,
+#                false, false, false,
+#                true,  true,  true,
+#                true,  true,  true]
+# imu0_nodelay: true
+# imu0_differential: false
+# imu0_relative: false
+# imu0_queue_size: 10
+
+# ========================================================================================
+# 노이즈 모델 (깊이 조정된 파라미터)
+# ========================================================================================
+
+process_noise_covariance: [0.05, 0,    0,    0,    0,    0,    0,     0,     0,    0,    0,    0,    0,    0,    0,
+                           0,    0.05, 0,    0,    0,    0,    0,     0,     0,    0,    0,    0,    0,    0,    0,
+                           0,    0,    0.06, 0,    0,    0,    0,     0,     0,    0,    0,    0,    0,    0,    0,
+                           0,    0,    0,    0.03, 0,    0,    0,     0,     0,    0,    0,    0,    0,    0,    0,
+                           0,    0,    0,    0,    0.03, 0,    0,     0,     0,    0,    0,    0,    0,    0,    0,
+                           0,    0,    0,    0,    0,    0.06, 0,     0,     0,    0,    0,    0,    0,    0,    0,
+                           0,    0,    0,    0,    0,    0,    0.025, 0,     0,    0,    0,    0,    0,    0,    0,
+                           0,    0,    0,    0,    0,    0,    0,     0.025, 0,    0,    0,    0,    0,    0,    0,
+                           0,    0,    0,    0,    0,    0,    0,     0,     0.04, 0,    0,    0,    0,    0,    0,
+                           0,    0,    0,    0,    0,    0,    0,     0,     0,    0.01, 0,    0,    0,    0,    0,
+                           0,    0,    0,    0,    0,    0,    0,     0,     0,    0,    0.01, 0,    0,    0,    0,
+                           0,    0,    0,    0,    0,    0,    0,     0,     0,    0,    0,    0.02, 0,    0,    0,
+                           0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0.01, 0,    0,
+                           0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0.01, 0,
+                           0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0.015]
+
+initial_estimate_covariance: [1e-9, 0,    0,    0,    0,    0,    0,    0,    0,    0,     0,     0,     0,    0,    0,
+                              0,    1e-9, 0,    0,    0,    0,    0,    0,    0,    0,     0,     0,     0,    0,    0,
+                              0,    0,    1e-9, 0,    0,    0,    0,    0,    0,    0,     0,     0,     0,    0,    0,
+                              0,    0,    0,    1e-9, 0,    0,    0,    0,    0,    0,     0,     0,     0,    0,    0,
+                              0,    0,    0,    0,    1e-9, 0,    0,    0,    0,    0,     0,     0,     0,    0,    0,
+                              0,    0,    0,    0,    0,    1e-9, 0,    0,    0,    0,     0,     0,     0,    0,    0,
+                              0,    0,    0,    0,    0,    0,    1e-9, 0,    0,    0,     0,     0,     0,    0,    0,
+                              0,    0,    0,    0,    0,    0,    0,    1e-9, 0,    0,     0,     0,     0,    0,    0,
+                              0,    0,    0,    0,    0,    0,    0,    0,    1e-9, 0,     0,     0,     0,    0,    0,
+                              0,    0,    0,    0,    0,    0,    0,    0,    0,    1e-9,  0,     0,     0,    0,    0,
+                              0,    0,    0,    0,    0,    0,    0,    0,    0,    0,     1e-9,  0,     0,    0,    0,
+                              0,    0,    0,    0,    0,    0,    0,    0,    0,    0,     0,     1e-9,  0,    0,    0,
+                              0,    0,    0,    0,    0,    0,    0,    0,    0,    0,     0,     0,     1e-9, 0,    0,
+                              0,    0,    0,    0,    0,    0,    0,    0,    0,    0,     0,     0,     0,    1e-9, 0,
+                              0,    0,    0,    0,    0,    0,    0,    0,    0,    0,     0,     0,    0,    0,    0.015]

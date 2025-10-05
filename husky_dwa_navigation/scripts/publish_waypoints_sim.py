@@ -3,14 +3,12 @@
 
 import rospy
 import json
-import utm
 import math
-import numpy as np
-from std_msgs.msg import String
-from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
-from sensor_msgs.msg import NavSatFix
-from nav_msgs.msg import Odometry
+from std_msgs.msg import String, ColorRGBA
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Point
+from nav_msgs.msg import Odometry, Path
 from actionlib_msgs.msg import GoalStatusArray
+from visualization_msgs.msg import Marker, MarkerArray
 
 class WaypointNavigator:
     """Localization 기반 Waypoint Navigation 노드
@@ -23,9 +21,10 @@ class WaypointNavigator:
     def __init__(self):
         rospy.init_node('waypoint_navigator', anonymous=True)
         
-        # Waypoints 사전 정의 (UTM 절대 좌표)
-        # simcity_gazebo.world 기준 UTM 좌표
-        self.waypoints_utm = [
+        # Waypoints 사전 정의 (Gazebo world 절대 좌표)
+        # Gazebo 좌표계: x=전진(북), y=좌우(동서)
+        # datum을 받아서 UTM 절대 좌표로 변환 예정
+        self.waypoints_gazebo = [
             {"x": 42, "y": 0},
             {"x": 44, "y": -45},
             {"x": -15, "y": -45},
@@ -39,10 +38,15 @@ class WaypointNavigator:
             {"x": -41, "y": -98},
             {"x": -15, "y": -100},
         ]
-        
-        # GPS 관련 변수 (검증용)
-        self.utm_origin_set = False
-        
+
+        # UTM 좌표 (datum 수신 후 계산)
+        self.waypoints_utm = []
+
+        # datum 정보
+        self.datum_utm_x = None
+        self.datum_utm_y = None
+        self.datum_received = False
+
         # 상태 변수
         self.current_waypoint_index = 0
         self.is_navigating = False
@@ -54,28 +58,28 @@ class WaypointNavigator:
         self.success_debounce_duration = 3.0  # SUCCESS 디바운싱 시간 (3초)
         self.waypoint_reached_threshold = 10.0  # waypoint 도달 판정 거리 (10m)
         
-        # ✅ 다중 위치 소스 관리
-        self.current_pose_utm = None  # 주 위치 정보
+        # ✅ 위치 소스 관리
+        self.current_pose_utm = None  # UTM 절대 위치 정보
         self.pose_source = "none"     # 현재 사용 중인 위치 소스
         self.pose_last_received = rospy.Time(0)  # 마지막 위치 정보 수신 시간
         self.pose_timeout = 5.0  # 위치 정보 타임아웃 (5초)
-        
-        # GPS 관련
-        self.current_gps = None
-        self.last_good_gps = None
         
         # Publishers
         self.goal_pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=1)
         self.waypoints_pub = rospy.Publisher('/waypoints', String, queue_size=1)
         self.status_pub = rospy.Publisher('/waypoint_navigator/status', String, queue_size=1)
+
+        # 시각화 Publishers
+        self.waypoint_markers_pub = rospy.Publisher('/waypoint_markers', MarkerArray, queue_size=1, latch=True)
+        self.path_pub = rospy.Publisher('/waypoint_path', Path, queue_size=1, latch=True)
         
-        # ✅ 다중 위치 소스 Subscribers
-        rospy.Subscriber("/fused_odom", PoseWithCovarianceStamped, self.fused_odom_callback)
-        rospy.Subscriber("/Odometry", Odometry, self.odometry_callback)  # 대안 위치 소스
-        rospy.Subscriber("/robot_pose", PoseWithCovarianceStamped, self.robot_pose_callback)  # 추가 대안
-        
+        # ✅ Datum 설정용 (첫 GPS를 받아서 waypoint 변환)
+        rospy.Subscriber("/pose/gps", PoseWithCovarianceStamped, self.datum_callback)
+
+        # ✅ 절대 위치 소스 Subscriber (map frame 기준)
+        rospy.Subscriber("/odometry/filtered", Odometry, self.filtered_odom_callback)  # EKF 융합 결과 (map 기준)
+
         # 기타 Subscribers
-        rospy.Subscriber("/ublox/fix", NavSatFix, self.gps_callback)
         rospy.Subscriber("/move_base/status", GoalStatusArray, self.move_base_status_callback)
         
         # ✅ 상태 모니터링용 타이머들
@@ -83,43 +87,68 @@ class WaypointNavigator:
         rospy.Timer(rospy.Duration(1.0), self.pose_health_check)  # 위치 정보 상태 체크
         
         rospy.loginfo("🚀 Waypoint Navigator 시작!")
-        rospy.loginfo(f"📍 총 {len(self.waypoints_utm)}개의 UTM waypoints 설정됨")
-        rospy.loginfo("📡 다중 Localization 소스: /fused_odom, /Odometry, /robot_pose")
+        rospy.loginfo(f"📍 총 {len(self.waypoints_gazebo)}개의 Gazebo waypoints 로드됨")
+        rospy.loginfo("⏳ GPS datum 수신 대기 중... (waypoint → UTM 변환 위해 필요)")
         rospy.loginfo("✅ 오직 move_base SUCCESS 상태에서만 다음 waypoint로 이동")
         rospy.loginfo(f"⏱️  SUCCESS 디바운싱: {self.success_debounce_duration}초")
-        
-        # ✅ waypoints 시각화를 한번만 발행
-        rospy.sleep(2.0)  # 시스템 초기화 대기
-        self.publish_waypoints_visualization()
-        
+
         # 위치 정보 대기 후 네비게이션 시작
         rospy.Timer(rospy.Duration(5.0), self.delayed_start)
     
     def delayed_start(self, event):
-        """위치 정보 안정화 후 네비게이션 시작"""
-        if self.current_pose_utm is not None:
-            rospy.loginfo(f"✅ 위치 정보 안정화 완료. 네비게이션 시작! (소스: {self.pose_source})")
-            self.start_navigation()
-            event.shutdown()  # 타이머 중지
-        else:
-            rospy.logwarn("⚠️  위치 정보를 아직 받지 못했습니다. 5초 후 재시도...")
+        """위치 정보 및 datum 안정화 후 네비게이션 시작"""
+        if not self.datum_received:
+            rospy.logwarn("⚠️  GPS datum을 아직 받지 못했습니다. waypoint 변환 대기 중...")
+            return
+
+        if self.current_pose_utm is None:
+            rospy.logwarn("⚠️  위치 정보를 아직 받지 못했습니다. 위치 소스 확인 필요...")
+            return
+
+        if len(self.waypoints_utm) == 0:
+            rospy.logerr("❌ UTM waypoint 변환 실패! datum_callback 확인 필요")
+            return
+
+        rospy.loginfo(f"✅ 위치 정보 안정화 완료. 네비게이션 시작!")
+        rospy.loginfo(f"   위치 소스: {self.pose_source}")
+        rospy.loginfo(f"   UTM waypoints: {len(self.waypoints_utm)}개")
+        self.start_navigation()
+        event.shutdown()  # 타이머 중지
     
-    def fused_odom_callback(self, msg):
-        """주 위치 소스: /fused_odom"""
-        self.update_pose_utm(msg.pose.pose, "fused_odom")
-        rospy.logdebug("📍 /fused_odom에서 위치 정보 수신")
-    
-    def odometry_callback(self, msg):
-        """대안 위치 소스: /Odometry"""
-        if self.pose_source == "none" or self.is_pose_stale():
-            self.update_pose_utm(msg.pose.pose, "Odometry")
-            rospy.loginfo_throttle(10, "📍 /Odometry를 위치 소스로 사용 중")
-    
-    def robot_pose_callback(self, msg):
-        """추가 대안 위치 소스: /robot_pose"""
-        if self.pose_source == "none" or self.is_pose_stale():
-            self.update_pose_utm(msg.pose.pose, "robot_pose")
-            rospy.loginfo_throttle(10, "📍 /robot_pose를 위치 소스로 사용 중")
+    def datum_callback(self, msg):
+        """첫 GPS를 받아서 datum 설정 및 waypoint 변환"""
+        if self.datum_received:
+            return  # 이미 설정됨
+
+        # 첫 GPS UTM 좌표 = Gazebo world 원점 (0, 0)
+        self.datum_utm_x = msg.pose.pose.position.x
+        self.datum_utm_y = msg.pose.pose.position.y
+        self.datum_received = True
+
+        rospy.loginfo(f"📍 Datum 설정 완료: UTM ({self.datum_utm_x:.2f}, {self.datum_utm_y:.2f})")
+        rospy.loginfo(f"   → Gazebo world (0, 0) = UTM ({self.datum_utm_x:.2f}, {self.datum_utm_y:.2f})")
+
+        # Gazebo waypoint → UTM 절대 좌표 변환
+        # 변환: Gazebo (x, y) → UTM (y + datum_x, x + datum_y)
+        #  (좌표축 스왑 + datum offset)
+        for wp_gz in self.waypoints_gazebo:
+            utm_x = wp_gz["y"] + self.datum_utm_x  # Gazebo y → UTM x (동쪽)
+            utm_y = wp_gz["x"] + self.datum_utm_y  # Gazebo x → UTM y (북쪽)
+            self.waypoints_utm.append({"x": utm_x, "y": utm_y})
+
+        rospy.loginfo("🔄 Gazebo → UTM 절대 좌표 변환 완료:")
+        for i, (gz, utm) in enumerate(zip(self.waypoints_gazebo, self.waypoints_utm)):
+            rospy.loginfo(f"   WP{i+1}: Gazebo({gz['x']:6.1f}, {gz['y']:6.1f}) → UTM({utm['x']:8.2f}, {utm['y']:8.2f})")
+
+        # 시각화 발행
+        self.publish_waypoints_visualization()
+
+    def filtered_odom_callback(self, msg):
+        """EKF 융합 결과: /odometry/filtered (map frame 기준 절대 위치)"""
+        # sensor_fusion_utm.py가 발행하는 /odometry/ieskf_utm을 EKF가 융합한 결과
+        # frame_id: "map" (UTM 절대 좌표계)
+        self.update_pose_utm(msg.pose.pose, "odometry/filtered")
+        rospy.logdebug("📍 /odometry/filtered에서 UTM 절대 위치 수신")
     
     def update_pose_utm(self, pose, source):
         """UTM 위치 정보 업데이트"""
@@ -157,27 +186,12 @@ class WaypointNavigator:
         if self.current_pose_utm is None:
             rospy.logwarn_throttle(10, "⚠️  위치 정보를 받지 못했습니다!")
             rospy.logwarn_throttle(10, "   확인 사항:")
-            rospy.logwarn_throttle(10, "   1. /fused_odom 토픽 상태: rostopic echo /fused_odom")
-            rospy.logwarn_throttle(10, "   2. /Odometry 토픽 상태: rostopic echo /Odometry")
-            rospy.logwarn_throttle(10, "   3. path_visualizer.py 실행 상태 확인")
+            rospy.logwarn_throttle(10, "   1. /odometry/filtered 토픽 상태: rostopic echo /odometry/filtered")
+            rospy.logwarn_throttle(10, "   2. ekf_localization_node 실행 상태 확인")
         elif self.is_pose_stale():
             rospy.logwarn_throttle(10, f"⚠️  위치 정보가 {self.pose_timeout}초 이상 업데이트되지 않음 (소스: {self.pose_source})")
         else:
             rospy.loginfo_throttle(30, f"✅ 위치 정보 정상 (소스: {self.pose_source})")
-    
-    def gps_to_utm(self, lat, lon):
-        """GPS 좌표를 UTM으로 변환 (GPS 검증용)"""
-        try:
-            if abs(lat) < 0.01 and abs(lon) < 0.01:
-                utm_x = lon * 111320
-                utm_y = lat * 111320
-                return utm_x, utm_y, "52S"
-            else:
-                utm_x, utm_y, zone_number, zone_letter = utm.from_latlon(lat, lon)
-                return utm_x, utm_y, f"{zone_number}{zone_letter}"
-        except Exception as e:
-            rospy.logwarn(f"❌ GPS->UTM 변환 실패: {e}")
-            return 0.0, 0.0, "52S"
     
     def calculate_distance(self, pos1, pos2):
         """좌표간 거리 계산"""
@@ -191,28 +205,6 @@ class WaypointNavigator:
             rospy.logwarn(f"❌ 거리 계산 실패: {e}")
             return float('inf')
     
-    def gps_callback(self, msg):
-        """GPS 데이터 업데이트 (검증용)"""
-        if msg.status.status >= 0:  # GPS 신호가 유효한 경우
-            self.current_gps = {
-                "lat": msg.latitude,
-                "lon": msg.longitude,
-                "alt": msg.altitude
-            }
-            
-            # GPS 원점 설정 (처음 한 번만)
-            if not self.utm_origin_set:
-                self.utm_origin_set = True
-                rospy.loginfo(f"🎯 GPS 원점 설정: ({msg.latitude:.6f}, {msg.longitude:.6f})")
-            
-            # UTM 변환 (검증용)
-            utm_x, utm_y, _ = self.gps_to_utm(msg.latitude, msg.longitude)
-            self.last_good_gps = {
-                "x": utm_x,
-                "y": utm_y,
-                "lat": msg.latitude,
-                "lon": msg.longitude
-            }
     
     def is_waypoint_reached(self, waypoint):
         """현재 위치에서 waypoint 도달 여부 확인"""
@@ -307,9 +299,9 @@ class WaypointNavigator:
     
         current_wp = self.waypoints_utm[self.current_waypoint_index]
     
-        # ✅ 순수 UTM 절대좌표로 목표점 생성
+        # ✅ 순수 map 절대좌표로 목표점 생성
         goal = PoseStamped()
-        goal.header.frame_id = "utm"  # UTM 절대좌표계
+        goal.header.frame_id = "map"  # map 절대좌표계 (local UTM origin)
         goal.header.stamp = rospy.Time(0)  # 최신 TF 사용
     
         # ✅ UTM 절대좌표 직접 사용 (변환 없음)
@@ -354,7 +346,7 @@ class WaypointNavigator:
             "target_utm_absolute": {
                 "x": float(current_wp["x"]),
                 "y": float(current_wp["y"]),
-                "frame": "utm"
+                "frame": "map"
             },
             "current_pose": {
                 "x": self.current_pose_utm["x"] if self.current_pose_utm else None,
@@ -425,13 +417,13 @@ class WaypointNavigator:
         """Waypoints 시각화를 위한 데이터 발행 (한번만)"""
         if self.waypoints_published:
             return  # ✅ 이미 발행했으면 skip
-            
+
         waypoints_data = {
-            "frame": "utm",  # 절대좌표계 명시
+            "frame": "map",  # 절대좌표계 명시 (local UTM origin)
             "coordinate_type": "absolute_utm",
             "waypoints": []
         }
-    
+
         # ✅ UTM 절대좌표를 x, y 형태로 직접 발행
         for i, wp in enumerate(self.waypoints_utm):
             waypoints_data["waypoints"].append({
@@ -441,15 +433,118 @@ class WaypointNavigator:
                 "completed": False,  # 초기에는 모두 미완료
                 "is_current": i == 0  # 첫번째가 현재 목표
             })
-    
+
         self.waypoints_pub.publish(String(data=json.dumps(waypoints_data)))
         self.waypoints_published = True  # ✅ 발행 완료 표시
-    
+
+        # ✅ RViz 시각화 발행
+        self.publish_rviz_visualization()
+
         # ✅ 디버깅 로그
         rospy.loginfo(f"📍 UTM 절대좌표 Waypoints 발행 완료 (한번만): {len(waypoints_data['waypoints'])}개")
         rospy.loginfo(f"   좌표계: {waypoints_data['frame']} (절대좌표)")
         rospy.loginfo(f"   엄격 모드: 오직 move_base SUCCESS에서만 다음 waypoint 이동")
         rospy.loginfo(f"   안전 모드: SUCCESS 디바운싱 + 거리 검증 + 다중 위치 소스")
+        rospy.loginfo(f"   🎨 RViz 시각화: /waypoint_markers, /waypoint_path")
+
+    def publish_rviz_visualization(self):
+        """RViz용 Waypoint 시각화 마커 발행"""
+        marker_array = MarkerArray()
+        path = Path()
+        path.header.frame_id = "map"
+        path.header.stamp = rospy.Time.now()
+
+        for i, wp in enumerate(self.waypoints_utm):
+            # 1. 구 마커 (Waypoint 위치)
+            sphere = Marker()
+            sphere.header.frame_id = "map"
+            sphere.header.stamp = rospy.Time.now()
+            sphere.ns = "waypoints"
+            sphere.id = i
+            sphere.type = Marker.SPHERE
+            sphere.action = Marker.ADD
+
+            sphere.pose.position.x = float(wp["x"])
+            sphere.pose.position.y = float(wp["y"])
+            sphere.pose.position.z = 0.5  # 지면에서 0.5m 위
+
+            sphere.pose.orientation.w = 1.0
+
+            sphere.scale.x = 1.0  # 1m 크기
+            sphere.scale.y = 1.0
+            sphere.scale.z = 1.0
+
+            # 색상: 첫 번째는 초록, 마지막은 빨강, 나머지는 파랑
+            if i == 0:
+                sphere.color = ColorRGBA(0.0, 1.0, 0.0, 0.8)  # 초록 (시작)
+            elif i == len(self.waypoints_utm) - 1:
+                sphere.color = ColorRGBA(1.0, 0.0, 0.0, 0.8)  # 빨강 (끝)
+            else:
+                sphere.color = ColorRGBA(0.0, 0.5, 1.0, 0.8)  # 파랑 (중간)
+
+            marker_array.markers.append(sphere)
+
+            # 2. 텍스트 마커 (번호 표시)
+            text = Marker()
+            text.header.frame_id = "map"
+            text.header.stamp = rospy.Time.now()
+            text.ns = "waypoint_numbers"
+            text.id = i + 1000  # ID 충돌 방지
+            text.type = Marker.TEXT_VIEW_FACING
+            text.action = Marker.ADD
+
+            text.pose.position.x = float(wp["x"])
+            text.pose.position.y = float(wp["y"])
+            text.pose.position.z = 1.5  # 지면에서 1.5m 위
+
+            text.text = f"WP{i+1}"
+            text.scale.z = 0.8  # 텍스트 크기
+
+            text.color = ColorRGBA(1.0, 1.0, 1.0, 1.0)  # 흰색
+
+            marker_array.markers.append(text)
+
+            # 3. Path에 추가
+            pose_stamped = PoseStamped()
+            pose_stamped.header.frame_id = "map"
+            pose_stamped.header.stamp = rospy.Time.now()
+            pose_stamped.pose.position.x = float(wp["x"])
+            pose_stamped.pose.position.y = float(wp["y"])
+            pose_stamped.pose.position.z = 0.0
+            pose_stamped.pose.orientation.w = 1.0
+
+            path.poses.append(pose_stamped)
+
+        # 4. 경로 연결 라인 (LINE_STRIP)
+        line = Marker()
+        line.header.frame_id = "map"
+        line.header.stamp = rospy.Time.now()
+        line.ns = "waypoint_path"
+        line.id = 2000
+        line.type = Marker.LINE_STRIP
+        line.action = Marker.ADD
+
+        line.scale.x = 0.2  # 라인 굵기
+
+        line.color = ColorRGBA(1.0, 1.0, 0.0, 0.8)  # 노란색
+
+        for wp in self.waypoints_utm:
+            point = Point()
+            point.x = float(wp["x"])
+            point.y = float(wp["y"])
+            point.z = 0.1
+            line.points.append(point)
+
+        marker_array.markers.append(line)
+
+        # 발행
+        self.waypoint_markers_pub.publish(marker_array)
+        self.path_pub.publish(path)
+
+        rospy.loginfo(f"🎨 RViz 시각화 발행 완료:")
+        rospy.loginfo(f"   - Waypoint 마커: {len(self.waypoints_utm)}개 (구 + 텍스트)")
+        rospy.loginfo(f"   - 경로 라인: 1개")
+        rospy.loginfo(f"   - Path 메시지: {len(path.poses)}개 포즈")
 
 if __name__ == '__main__':
     try:
